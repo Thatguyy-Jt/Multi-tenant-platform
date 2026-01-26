@@ -138,18 +138,19 @@ export const login = async (req, res, next) => {
 
     // Generate JWT token
     const token = generateToken(user._id);
+    logger.info(`JWT token generated for user: ${email}, token length: ${token.length}`);
 
     // Set HTTP-only cookie with enhanced security
-    setAuthCookie(res, token);
+    try {
+      setAuthCookie(res, token);
+      logger.info(`Cookie set successfully for user: ${email}`);
+      logger.info(`Cookie configuration: secure=${process.env.NODE_ENV === 'production'}, sameSite=${process.env.NODE_ENV === 'production' ? 'none' : 'lax'}`);
+    } catch (cookieError) {
+      logger.error(`Failed to set cookie: ${cookieError.message}`);
+      // Continue anyway - token is generated, just cookie setting failed
+    }
 
-    // Log cookie setting for debugging
-    logger.info(`User logged in: ${email}, Cookie set with token length: ${token.length}`);
-    logger.info(`Cookie options: ${JSON.stringify({
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      path: '/',
-    })}`);
+    logger.info(`User logged in successfully: ${email}`);
 
     res.status(200).json({
       success: true,
