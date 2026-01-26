@@ -22,6 +22,10 @@ import billingRoutes from './routes/billingRoutes.js';
 // Get environment configuration (validates env vars on import)
 const envConfig = getEnvConfig();
 
+// Log CORS configuration on startup
+logger.info(`CORS Configuration - Frontend URL: ${envConfig.frontendUrl}`);
+logger.info(`CORS Configuration - Environment: ${envConfig.env}`);
+
 // Initialize Express app
 const app = express();
 
@@ -56,27 +60,44 @@ configureSecurity(app);
 // CORS configuration
 const corsOptions = {
   origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, Postman, etc.)
+    // Normalize origins (remove trailing slashes, convert to lowercase for comparison)
+    const normalizeOrigin = (url) => {
+      if (!url) return url;
+      return url.replace(/\/$/, '').toLowerCase();
+    };
+
+    // Build allowed origins list
+    const allowedOrigins = [
+      envConfig.frontendUrl,
+      ...(envConfig.isDevelopment ? ['http://localhost:3000', 'http://127.0.0.1:3000'] : []),
+    ].map(normalizeOrigin).filter(Boolean);
+
+    const normalizedOrigin = normalizeOrigin(origin);
+
+    // Allow requests with no origin (mobile apps, Postman, etc.) in development
     if (!origin && envConfig.isDevelopment) {
+      logger.info('CORS: Allowing request with no origin (development mode)');
       return callback(null, true);
     }
 
     // Check if origin is allowed
-    const allowedOrigins = [
-      envConfig.frontendUrl,
-      ...(envConfig.isDevelopment ? ['http://localhost:3000', 'http://127.0.0.1:3000'] : []),
-    ];
-
-    if (allowedOrigins.includes(origin) || !origin) {
+    if (normalizedOrigin && allowedOrigins.includes(normalizedOrigin)) {
+      logger.info(`CORS: Allowing origin: ${origin}`);
+      callback(null, true);
+    } else if (!origin) {
+      // Allow requests with no origin (for same-origin requests)
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      logger.warn(`CORS: Blocked origin: ${origin}. Allowed origins: ${allowedOrigins.join(', ')}`);
+      callback(new Error(`Not allowed by CORS. Origin: ${origin}`));
     }
   },
   credentials: true,
   optionsSuccessStatus: 200,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Request-ID'],
+  exposedHeaders: ['X-Request-ID', 'X-Response-Time'],
+  maxAge: 86400, // 24 hours
 };
 
 app.use(cors(corsOptions));

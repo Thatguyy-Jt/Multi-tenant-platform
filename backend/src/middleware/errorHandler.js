@@ -79,6 +79,14 @@ const errorHandler = (err, req, res, next) => {
       isOperational: false,
     };
   }
+  // CORS errors
+  else if (err.message && err.message.includes('CORS')) {
+    error = {
+      message: 'CORS policy: Origin not allowed',
+      statusCode: 403,
+      isOperational: true,
+    };
+  }
 
   // Log error with context
   const logData = {
