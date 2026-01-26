@@ -15,8 +15,14 @@ export const protect = async (req, res, next) => {
       token = req.cookies.token;
     }
 
+    // Debug logging in development
+    if (process.env.NODE_ENV !== 'production') {
+      logger.info(`Auth check - Cookies: ${JSON.stringify(req.cookies)}, Has token: ${!!token}`);
+    }
+
     // Make sure token exists
     if (!token) {
+      logger.warn(`Auth failed - No token found. Cookies: ${JSON.stringify(req.cookies)}`);
       return res.status(401).json({
         success: false,
         error: {

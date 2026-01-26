@@ -10,12 +10,16 @@
 export const getCookieOptions = () => {
   const isProduction = process.env.NODE_ENV === 'production';
   
+  // For cross-origin requests (different domains), we need sameSite: 'none' with secure: true
+  // sameSite: 'strict' only works for same-site requests
+  // sameSite: 'none' requires secure: true (HTTPS)
   return {
     httpOnly: true,
-    secure: isProduction, // Only send over HTTPS in production
-    sameSite: isProduction ? 'strict' : 'lax', // Strict in production, lax in development
+    secure: isProduction, // Required for sameSite: 'none' and HTTPS in production
+    sameSite: isProduction ? 'none' : 'lax', // 'none' for cross-origin, 'lax' for development
     path: '/',
-    ...(isProduction && process.env.COOKIE_DOMAIN && { domain: process.env.COOKIE_DOMAIN }),
+    // Don't set domain for cross-origin cookies - let browser handle it
+    // Setting domain restricts which domains can receive the cookie
   };
 };
 
