@@ -66,11 +66,18 @@ const corsOptions = {
       return url.replace(/\/$/, '').toLowerCase();
     };
 
-    // Build allowed origins list
+    // Build allowed origins list - include both the configured URL and common Vercel patterns
     const allowedOrigins = [
       envConfig.frontendUrl,
+      // Allow any Vercel deployment of this project
+      ...(envConfig.isProduction ? [
+        'https://m0tion.vercel.app',
+        'https://multi-tenant-platform-ten.vercel.app',
+        // Pattern match for any vercel.app subdomain
+        /^https:\/\/.*\.vercel\.app$/,
+      ] : []),
       ...(envConfig.isDevelopment ? ['http://localhost:3000', 'http://127.0.0.1:3000'] : []),
-    ].map(normalizeOrigin).filter(Boolean);
+    ].filter(Boolean);
 
     const normalizedOrigin = normalizeOrigin(origin);
 
@@ -81,14 +88,35 @@ const corsOptions = {
     }
 
     // Check if origin is allowed
-    if (normalizedOrigin && allowedOrigins.includes(normalizedOrigin)) {
+    let isAllowed = false;
+    
+    if (!origin) {
+      // Allow requests with no origin (for same-origin requests)
+      isAllowed = true;
+    } else {
+      // Check against string origins
+      const stringOrigins = allowedOrigins.filter(o => typeof o === 'string');
+      const normalizedStringOrigins = stringOrigins.map(normalizeOrigin);
+      
+      if (normalizedStringOrigins.includes(normalizedOrigin)) {
+        isAllowed = true;
+      } else {
+        // Check against regex patterns (for Vercel subdomains)
+        const regexOrigins = allowedOrigins.filter(o => o instanceof RegExp);
+        for (const regex of regexOrigins) {
+          if (regex.test(origin)) {
+            isAllowed = true;
+            break;
+          }
+        }
+      }
+    }
+
+    if (isAllowed) {
       logger.info(`CORS: Allowing origin: ${origin}`);
       callback(null, true);
-    } else if (!origin) {
-      // Allow requests with no origin (for same-origin requests)
-      callback(null, true);
     } else {
-      logger.warn(`CORS: Blocked origin: ${origin}. Allowed origins: ${allowedOrigins.join(', ')}`);
+      logger.warn(`CORS: Blocked origin: ${origin}. Allowed origins: ${allowedOrigins.filter(o => typeof o === 'string').join(', ')}`);
       callback(new Error(`Not allowed by CORS. Origin: ${origin}`));
     }
   },
@@ -98,6 +126,7 @@ const corsOptions = {
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Request-ID'],
   exposedHeaders: ['X-Request-ID', 'X-Response-Time'],
   maxAge: 86400, // 24 hours
+  preflightContinue: false,
 };
 
 app.use(cors(corsOptions));
