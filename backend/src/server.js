@@ -188,12 +188,35 @@ app.get('/health', async (req, res) => {
   res.status(statusCode).json(healthCheck);
 });
 
+// Root endpoint
+app.get('/', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'Multi-Tenant SaaS API',
+    version: '1.0.0',
+    endpoints: {
+      health: '/health',
+      api: '/api',
+      auth: '/api/auth',
+      docs: 'See API documentation for available endpoints',
+    },
+  });
+});
+
 // API root endpoint
 app.get('/api', (req, res) => {
   res.status(200).json({
     success: true,
     message: 'Multi-Tenant SaaS API',
     version: '1.0.0',
+    endpoints: {
+      auth: '/api/auth',
+      organization: '/api/organization',
+      projects: '/api/projects',
+      tasks: '/api/tasks',
+      dashboard: '/api/dashboard',
+      billing: '/api/billing',
+    },
   });
 });
 
