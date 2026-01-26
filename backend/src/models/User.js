@@ -51,7 +51,7 @@ const userSchema = new mongoose.Schema(
 // Most queries filter by tenantId + organizationId
 userSchema.index({ tenantId: 1, organizationId: 1 });
 userSchema.index({ organizationId: 1, role: 1 }); // For role-based queries
-userSchema.index({ email: 1 }); // Already unique, but explicit index for lookups
+// Note: email already has unique: true which creates an index automatically, so we don't need to add it again
 userSchema.index({ resetPasswordToken: 1 }); // For password reset queries
 
 // Hash password before saving
