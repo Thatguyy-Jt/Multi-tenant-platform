@@ -155,7 +155,9 @@ app.use((req, res, next) => {
     path: req.path,
     ip: req.ip,
     requestId: req.id,
+    origin: req.get('origin'),
     userAgent: req.get('user-agent'),
+    cookies: req.cookies ? Object.keys(req.cookies) : [],
   });
   next();
 });

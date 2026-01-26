@@ -18,6 +18,17 @@ import { authLimiter } from '../middleware/rateLimiter.js';
 
 const router = express.Router();
 
+// Log all requests to auth routes for debugging
+router.use((req, res, next) => {
+  const logger = require('../utils/logger.js').default;
+  logger.info(`Auth route accessed: ${req.method} ${req.path}`, {
+    origin: req.get('origin'),
+    ip: req.ip,
+    hasBody: !!req.body,
+  });
+  next();
+});
+
 // Public routes with strict rate limiting
 router.post('/signup', authLimiter, validateSignup, signup);
 router.post('/login', authLimiter, validateLogin, login);

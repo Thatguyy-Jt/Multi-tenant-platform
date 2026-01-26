@@ -79,12 +79,30 @@ export const signup = async (req, res, next) => {
  */
 export const login = async (req, res, next) => {
   try {
+    logger.info('Login attempt received', { 
+      email: req.body?.email,
+      hasPassword: !!req.body?.password,
+      origin: req.get('origin'),
+      ip: req.ip 
+    });
+
     const { email, password } = req.body;
+
+    if (!email || !password) {
+      logger.warn('Login attempt with missing credentials');
+      return res.status(400).json({
+        success: false,
+        error: {
+          message: 'Email and password are required',
+        },
+      });
+    }
 
     // Find user and include password (since it's select: false by default)
     const user = await User.findOne({ email }).select('+password');
 
     if (!user) {
+      logger.warn(`Login failed: User not found for email: ${email}`);
       return res.status(401).json({
         success: false,
         error: {
@@ -97,6 +115,7 @@ export const login = async (req, res, next) => {
     const isMatch = await user.matchPassword(password);
 
     if (!isMatch) {
+      logger.warn(`Login failed: Invalid password for email: ${email}`);
       return res.status(401).json({
         success: false,
         error: {
