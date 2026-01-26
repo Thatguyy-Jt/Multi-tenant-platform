@@ -141,8 +141,18 @@ export const login = async (req, res, next) => {
     logger.info(`JWT token generated for user: ${email}, token length: ${token.length}`);
 
     // Set HTTP-only cookie with enhanced security
+    // #region agent log
+    fetch('http://127.0.0.1:7243/ingest/1bfdac8b-041c-443a-abd5-a37cb47a372e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'authController.js:143',message:'BEFORE setAuthCookie call',data:{email,hasToken:!!token,responseHeadersSent:res.headersSent,statusCode:res.statusCode},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+    // #endregion
+    
     try {
       setAuthCookie(res, token);
+      
+      // #region agent log
+      const setCookieAfter = res.getHeader('Set-Cookie');
+      fetch('http://127.0.0.1:7243/ingest/1bfdac8b-041c-443a-abd5-a37cb47a372e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'authController.js:149',message:'AFTER setAuthCookie call',data:{email,hasSetCookie:!!setCookieAfter,setCookieValue:Array.isArray(setCookieAfter)?setCookieAfter[0]:setCookieAfter,responseHeadersSent:res.headersSent},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+      // #endregion
+      
       logger.info(`Cookie set successfully for user: ${email}`);
       logger.info(`Cookie configuration: secure=${process.env.NODE_ENV === 'production'}, sameSite=${process.env.NODE_ENV === 'production' ? 'none' : 'lax'}`);
       
@@ -153,11 +163,19 @@ export const login = async (req, res, next) => {
         headerValue: Array.isArray(setCookieHeader) ? setCookieHeader[0] : setCookieHeader,
       });
     } catch (cookieError) {
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/1bfdac8b-041c-443a-abd5-a37cb47a372e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'authController.js:161',message:'Cookie setting ERROR',data:{email,error:cookieError.message,stack:cookieError.stack},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
+      // #endregion
       logger.error(`Failed to set cookie: ${cookieError.message}`);
       // Continue anyway - token is generated, just cookie setting failed
     }
 
     logger.info(`User logged in successfully: ${email}`);
+
+    // #region agent log
+    const finalHeaders = res.getHeader('Set-Cookie');
+    fetch('http://127.0.0.1:7243/ingest/1bfdac8b-041c-443a-abd5-a37cb47a372e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'authController.js:170',message:'BEFORE res.json() - final check',data:{email,hasSetCookie:!!finalHeaders,setCookieValue:Array.isArray(finalHeaders)?finalHeaders[0]:finalHeaders,responseHeadersSent:res.headersSent},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H'})}).catch(()=>{});
+    // #endregion
 
     res.status(200).json({
       success: true,

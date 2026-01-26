@@ -32,10 +32,18 @@ export const getCookieOptions = () => {
  * @param {number} maxAge - Max age in milliseconds (default: 7 days)
  */
 export const setAuthCookie = (res, token, maxAge = 7 * 24 * 60 * 60 * 1000) => {
+  // #region agent log
+  fetch('http://127.0.0.1:7243/ingest/1bfdac8b-041c-443a-abd5-a37cb47a372e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cookies.js:34',message:'setAuthCookie ENTRY',data:{hasToken:!!token,tokenLength:token?.length,maxAge},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+  // #endregion
+  
   const options = {
     ...getCookieOptions(),
     maxAge,
   };
+  
+  // #region agent log
+  fetch('http://127.0.0.1:7243/ingest/1bfdac8b-041c-443a-abd5-a37cb47a372e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cookies.js:42',message:'Cookie options BEFORE res.cookie',data:{secure:options.secure,sameSite:options.sameSite,httpOnly:options.httpOnly,path:options.path,maxAge:options.maxAge,hasDomain:!!options.domain,domain:options.domain},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+  // #endregion
   
   // Log cookie configuration for debugging
   logger.info('Setting auth cookie', {
@@ -48,7 +56,18 @@ export const setAuthCookie = (res, token, maxAge = 7 * 24 * 60 * 60 * 1000) => {
     tokenLength: token?.length,
   });
   
+  // #region agent log
+  const headersBefore = res.getHeader('Set-Cookie');
+  fetch('http://127.0.0.1:7243/ingest/1bfdac8b-041c-443a-abd5-a37cb47a372e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cookies.js:58',message:'Set-Cookie header BEFORE res.cookie',data:{hasHeader:!!headersBefore,headerValue:Array.isArray(headersBefore)?headersBefore[0]:headersBefore},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+  // #endregion
+  
   res.cookie('token', token, options);
+  
+  // #region agent log
+  const headersAfter = res.getHeader('Set-Cookie');
+  const allHeaders = res.getHeaders();
+  fetch('http://127.0.0.1:7243/ingest/1bfdac8b-041c-443a-abd5-a37cb47a372e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'cookies.js:66',message:'Set-Cookie header AFTER res.cookie',data:{hasHeader:!!headersAfter,headerValue:Array.isArray(headersAfter)?headersAfter[0]:headersAfter,allSetCookieHeaders:Array.isArray(headersAfter)?headersAfter:headersAfter?[headersAfter]:[],responseHeadersCount:Object.keys(allHeaders).length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+  // #endregion
   
   // Verify cookie was set by checking response headers
   const setCookieHeader = res.getHeader('Set-Cookie');

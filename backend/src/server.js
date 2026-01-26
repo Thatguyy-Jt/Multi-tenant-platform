@@ -118,9 +118,15 @@ const corsOptions = {
     }
 
     if (isAllowed) {
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/1bfdac8b-041c-443a-abd5-a37cb47a372e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server.js:120',message:'CORS origin ALLOWED',data:{origin,normalizedOrigin,isProduction:envConfig.isProduction,frontendUrl:envConfig.frontendUrl},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'K'})}).catch(()=>{});
+      // #endregion
       logger.info(`CORS: Allowing origin: ${origin}`);
       callback(null, true);
     } else {
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/1bfdac8b-041c-443a-abd5-a37cb47a372e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server.js:125',message:'CORS origin BLOCKED',data:{origin,normalizedOrigin,allowedOrigins:allowedOrigins.filter(o=>typeof o==='string')},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'L'})}).catch(()=>{});
+      // #endregion
       logger.warn(`CORS: Blocked origin: ${origin}. Allowed origins: ${allowedOrigins.filter(o => typeof o === 'string').join(', ')}`);
       callback(new Error(`Not allowed by CORS. Origin: ${origin}`));
     }
@@ -159,6 +165,12 @@ app.use((req, res, next) => {
   res.end = function(...args) {
     if (req.path.includes('/auth/login') || req.path.includes('/auth/signup')) {
       const setCookieHeader = res.getHeader('Set-Cookie');
+      const allHeaders = res.getHeaders();
+      
+      // #region agent log
+      fetch('http://127.0.0.1:7243/ingest/1bfdac8b-041c-443a-abd5-a37cb47a372e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server.js:156',message:'Response END - final headers check',data:{path:req.path,statusCode:res.statusCode,hasSetCookie:!!setCookieHeader,setCookieValue:Array.isArray(setCookieHeader)?setCookieHeader[0]:setCookieHeader,allHeaders:Object.keys(allHeaders),headersSent:res.headersSent},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
+      // #endregion
+      
       logger.info('Response sent with headers', {
         path: req.path,
         statusCode: res.statusCode,
@@ -169,6 +181,12 @@ app.use((req, res, next) => {
     }
     originalEnd.apply(this, args);
   };
+  
+  // #region agent log
+  if (req.path.includes('/auth/login') || req.path.includes('/auth/me')) {
+    fetch('http://127.0.0.1:7243/ingest/1bfdac8b-041c-443a-abd5-a37cb47a372e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'server.js:175',message:'Request received',data:{method:req.method,path:req.path,origin:req.get('origin'),hasCookies:!!req.cookies,cookieKeys:req.cookies?Object.keys(req.cookies):[],cookieHeader:req.get('cookie')},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'J'})}).catch(()=>{});
+  }
+  // #endregion
   
   logger.info({
     message: `${req.method} ${req.path}`,
