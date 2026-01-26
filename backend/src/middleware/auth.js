@@ -15,14 +15,24 @@ export const protect = async (req, res, next) => {
       token = req.cookies.token;
     }
 
-    // Debug logging in development
-    if (process.env.NODE_ENV !== 'production') {
-      logger.info(`Auth check - Cookies: ${JSON.stringify(req.cookies)}, Has token: ${!!token}`);
-    }
+    // Enhanced debug logging
+    logger.info('Auth middleware check', {
+      hasCookies: !!req.cookies,
+      cookies: req.cookies ? Object.keys(req.cookies) : [],
+      hasToken: !!token,
+      tokenLength: token?.length,
+      origin: req.get('origin'),
+      referer: req.get('referer'),
+      cookieHeader: req.get('cookie'),
+    });
 
     // Make sure token exists
     if (!token) {
-      logger.warn(`Auth failed - No token found. Cookies: ${JSON.stringify(req.cookies)}`);
+      logger.warn('Auth failed - No token found', {
+        cookies: req.cookies ? Object.keys(req.cookies) : [],
+        cookieHeader: req.get('cookie'),
+        origin: req.get('origin'),
+      });
       return res.status(401).json({
         success: false,
         error: {

@@ -145,6 +145,13 @@ export const login = async (req, res, next) => {
       setAuthCookie(res, token);
       logger.info(`Cookie set successfully for user: ${email}`);
       logger.info(`Cookie configuration: secure=${process.env.NODE_ENV === 'production'}, sameSite=${process.env.NODE_ENV === 'production' ? 'none' : 'lax'}`);
+      
+      // Log the actual Set-Cookie header that will be sent
+      const setCookieHeader = res.getHeader('Set-Cookie');
+      logger.info('Set-Cookie header in response', {
+        hasHeader: !!setCookieHeader,
+        headerValue: Array.isArray(setCookieHeader) ? setCookieHeader[0] : setCookieHeader,
+      });
     } catch (cookieError) {
       logger.error(`Failed to set cookie: ${cookieError.message}`);
       // Continue anyway - token is generated, just cookie setting failed

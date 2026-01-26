@@ -154,6 +154,22 @@ app.use('/api/', apiLimiter);
 
 // Request logging middleware
 app.use((req, res, next) => {
+  // Log response headers after response is sent (for debugging cookies)
+  const originalEnd = res.end;
+  res.end = function(...args) {
+    if (req.path.includes('/auth/login') || req.path.includes('/auth/signup')) {
+      const setCookieHeader = res.getHeader('Set-Cookie');
+      logger.info('Response sent with headers', {
+        path: req.path,
+        statusCode: res.statusCode,
+        hasSetCookie: !!setCookieHeader,
+        setCookieValue: Array.isArray(setCookieHeader) ? setCookieHeader[0] : setCookieHeader,
+        responseHeaders: Object.keys(res.getHeaders()),
+      });
+    }
+    originalEnd.apply(this, args);
+  };
+  
   logger.info({
     message: `${req.method} ${req.path}`,
     method: req.method,
@@ -163,6 +179,7 @@ app.use((req, res, next) => {
     origin: req.get('origin'),
     userAgent: req.get('user-agent'),
     cookies: req.cookies ? Object.keys(req.cookies) : [],
+    cookieHeader: req.get('cookie'),
   });
   next();
 });

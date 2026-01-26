@@ -3,6 +3,8 @@
  * Standardizes cookie configuration across the application
  */
 
+import logger from './logger.js';
+
 /**
  * Get cookie options based on environment
  * @returns {Object} Cookie options
@@ -30,9 +32,29 @@ export const getCookieOptions = () => {
  * @param {number} maxAge - Max age in milliseconds (default: 7 days)
  */
 export const setAuthCookie = (res, token, maxAge = 7 * 24 * 60 * 60 * 1000) => {
-  res.cookie('token', token, {
+  const options = {
     ...getCookieOptions(),
     maxAge,
+  };
+  
+  // Log cookie configuration for debugging
+  logger.info('Setting auth cookie', {
+    secure: options.secure,
+    sameSite: options.sameSite,
+    httpOnly: options.httpOnly,
+    path: options.path,
+    maxAge: maxAge,
+    hasToken: !!token,
+    tokenLength: token?.length,
+  });
+  
+  res.cookie('token', token, options);
+  
+  // Verify cookie was set by checking response headers
+  const setCookieHeader = res.getHeader('Set-Cookie');
+  logger.info('Cookie set in response', {
+    hasSetCookieHeader: !!setCookieHeader,
+    setCookieValue: Array.isArray(setCookieHeader) ? setCookieHeader[0] : setCookieHeader,
   });
 };
 
