@@ -120,11 +120,11 @@ const corsOptions = {
       callback(new Error(`Not allowed by CORS. Origin: ${origin}`));
     }
   },
-  credentials: true,
+  credentials: true, // CRITICAL: Must be true for cookies to work
   optionsSuccessStatus: 200,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-Request-ID'],
-  exposedHeaders: ['X-Request-ID', 'X-Response-Time'],
+  exposedHeaders: ['X-Request-ID', 'X-Response-Time', 'Set-Cookie'], // Expose Set-Cookie for debugging
   maxAge: 86400, // 24 hours
   preflightContinue: false,
 };

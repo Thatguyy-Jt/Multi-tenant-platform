@@ -123,7 +123,14 @@ export const login = async (req, res, next) => {
     // Set HTTP-only cookie with enhanced security
     setAuthCookie(res, token);
 
-    logger.info(`User logged in: ${email}`);
+    // Log cookie setting for debugging
+    logger.info(`User logged in: ${email}, Cookie set with token length: ${token.length}`);
+    logger.info(`Cookie options: ${JSON.stringify({
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      path: '/',
+    })}`);
 
     res.status(200).json({
       success: true,
