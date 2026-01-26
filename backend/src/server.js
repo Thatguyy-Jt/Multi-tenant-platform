@@ -34,8 +34,13 @@ if (envConfig.isProduction) {
   app.set('trust proxy', 1);
 }
 
-// Connect to MongoDB
-connectDB();
+// Connect to MongoDB (non-blocking - server will start even if DB connection fails initially)
+// This prevents the server from crashing if DB is temporarily unavailable
+connectDB().catch((error) => {
+  logger.error(`Failed to connect to MongoDB on startup: ${error.message}`);
+  logger.warn('Server will continue to start, but database operations will fail until connection is established');
+  // Don't exit - let the server start and retry connection
+});
 
 // Security middleware with production-specific configuration
 app.use(

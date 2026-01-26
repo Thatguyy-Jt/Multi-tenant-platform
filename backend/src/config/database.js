@@ -86,7 +86,9 @@ const connectDB = async () => {
     if (error.name === 'MongoServerSelectionError') {
       logger.error('Could not connect to MongoDB. Please check your connection string and network settings.');
     }
-    process.exit(1);
+    // Don't exit immediately - throw error to be handled by caller
+    // This allows the server to start and show a health check error instead of 503
+    throw error;
   }
 };
 

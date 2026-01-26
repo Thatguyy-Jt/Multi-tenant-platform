@@ -111,14 +111,13 @@ export const getEnvConfig = () => {
   };
 };
 
-// Validate on import
+// Validate on import (but don't exit immediately - let server handle it)
 try {
   validateEnv();
 } catch (error) {
   console.error('Environment validation failed:', error.message);
-  if (process.env.NODE_ENV === 'production') {
-    process.exit(1);
-  }
+  // Log the error but don't exit - let the server start and show a clear error
+  // The server will handle the error gracefully
 }
 
 export default getEnvConfig();
