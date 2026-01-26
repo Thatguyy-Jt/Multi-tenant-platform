@@ -1,0 +1,32 @@
+@import "tailwindcss";
+
+@layer base {
+  html {
+    font-family: 'Inter', sans-serif;
+    scroll-behavior: smooth;
+  }
+  
+  body {
+    @apply bg-black text-zinc-100 antialiased;
+    overflow-x: hidden;
+  }
+  
+  .selection\:bg-teal-500\/30::selection {
+    background-color: rgba(20, 184, 166, 0.3);
+  }
+  
+  .selection\:text-teal-200::selection {
+    color: rgb(153, 246, 228);
+  }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}

@@ -1,0 +1,318 @@
+import User from '../models/User.js';
+import Organization from '../models/Organization.js';
+import { generateToken } from '../utils/jwt.js';
+import { sendPasswordResetEmail } from '../services/emailService.js';
+import { setAuthCookie, clearAuthCookie } from '../utils/cookies.js';
+import logger from '../utils/logger.js';
+import crypto from 'crypto';
+
+/**
+ * @desc    Register new user and create organization
+ * @route   POST /api/auth/signup
+ * @access  Public
+ */
+export const signup = async (req, res, next) => {
+  try {
+    const { email, password, organizationName } = req.body;
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          message: 'User already exists with this email',
+        },
+      });
+    }
+
+    // Create organization first
+    const organization = await Organization.create({
+      name: organizationName,
+    });
+
+    // Create user with owner role
+    const user = await User.create({
+      email,
+      password,
+      role: 'owner',
+      organizationId: organization._id,
+      tenantId: organization.tenantId,
+    });
+
+    // Generate JWT token
+    const token = generateToken(user._id);
+
+    // Set HTTP-only cookie with enhanced security
+    setAuthCookie(res, token);
+
+    logger.info(`New user registered: ${email} (Organization: ${organization.name})`);
+
+    res.status(201).json({
+      success: true,
+      data: {
+        user: {
+          id: user._id,
+          email: user.email,
+          role: user.role,
+          organizationId: user.organizationId,
+          tenantId: user.tenantId,
+        },
+        organization: {
+          id: organization._id,
+          name: organization.name,
+          tenantId: organization.tenantId,
+          subscriptionPlan: organization.subscriptionPlan,
+        },
+      },
+    });
+  } catch (error) {
+    logger.error(`Signup error: ${error.message}`);
+    next(error);
+  }
+};
+
+/**
+ * @desc    Login user
+ * @route   POST /api/auth/login
+ * @access  Public
+ */
+export const login = async (req, res, next) => {
+  try {
+    const { email, password } = req.body;
+
+    // Find user and include password (since it's select: false by default)
+    const user = await User.findOne({ email }).select('+password');
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        error: {
+          message: 'Invalid credentials',
+        },
+      });
+    }
+
+    // Check if password matches
+    const isMatch = await user.matchPassword(password);
+
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        error: {
+          message: 'Invalid credentials',
+        },
+      });
+    }
+
+    // Get organization
+    const organization = await Organization.findById(user.organizationId);
+
+    if (!organization) {
+      return res.status(500).json({
+        success: false,
+        error: {
+          message: 'Organization not found',
+        },
+      });
+    }
+
+    // Generate JWT token
+    const token = generateToken(user._id);
+
+    // Set HTTP-only cookie with enhanced security
+    setAuthCookie(res, token);
+
+    logger.info(`User logged in: ${email}`);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        user: {
+          id: user._id,
+          email: user.email,
+          role: user.role,
+          organizationId: user.organizationId,
+          tenantId: user.tenantId,
+        },
+        organization: {
+          id: organization._id,
+          name: organization.name,
+          tenantId: organization.tenantId,
+          subscriptionPlan: organization.subscriptionPlan,
+        },
+      },
+    });
+  } catch (error) {
+    logger.error(`Login error: ${error.message}`);
+    next(error);
+  }
+};
+
+/**
+ * @desc    Logout user
+ * @route   POST /api/auth/logout
+ * @access  Public
+ */
+export const logout = async (req, res) => {
+  // Clear authentication cookie
+  clearAuthCookie(res);
+
+  res.status(200).json({
+    success: true,
+    message: 'Logged out successfully',
+  });
+};
+
+/**
+ * @desc    Get current logged in user
+ * @route   GET /api/auth/me
+ * @access  Private
+ */
+export const getMe = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id);
+    const organization = await Organization.findById(user.organizationId);
+
+    if (!organization) {
+      return res.status(500).json({
+        success: false,
+        error: {
+          message: 'Organization not found',
+        },
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        user: {
+          id: user._id,
+          email: user.email,
+          role: user.role,
+          organizationId: user.organizationId,
+          tenantId: user.tenantId,
+        },
+        organization: {
+          id: organization._id,
+          name: organization.name,
+          tenantId: organization.tenantId,
+          subscriptionPlan: organization.subscriptionPlan,
+        },
+      },
+    });
+  } catch (error) {
+    logger.error(`Get me error: ${error.message}`);
+    next(error);
+  }
+};
+
+/**
+ * @desc    Forgot password
+ * @route   POST /api/auth/forgot-password
+ * @access  Public
+ */
+export const forgotPassword = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+
+    const user = await User.findOne({ email });
+
+    // Don't reveal if user exists or not (security best practice)
+    if (!user) {
+      return res.status(200).json({
+        success: true,
+        message: 'If that email exists, a password reset link has been sent',
+      });
+    }
+
+    // Generate reset token
+    const resetToken = user.getResetPasswordToken();
+    await user.save({ validateBeforeSave: false });
+
+    try {
+      await sendPasswordResetEmail(user.email, resetToken);
+
+      res.status(200).json({
+        success: true,
+        message: 'If that email exists, a password reset link has been sent',
+      });
+    } catch (error) {
+      // Log the reset token for testing purposes when email fails
+      logger.warn(`Failed to send password reset email: ${error.message}`);
+      logger.info(`Password reset token for testing: ${resetToken}`);
+      logger.info(`Reset URL: ${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`);
+      
+      // Don't clear the token - keep it so users can test the reset flow
+      // The token will expire naturally after the expiry time
+
+      res.status(200).json({
+        success: true,
+        message: 'If that email exists, a password reset link has been sent',
+        // In development, include token in response for testing
+        ...(process.env.NODE_ENV !== 'production' && {
+          debug: {
+            resetToken,
+            resetUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`,
+            note: 'Token included for development testing only',
+          },
+        }),
+      });
+    }
+  } catch (error) {
+    logger.error(`Forgot password error: ${error.message}`);
+    next(error);
+  }
+};
+
+/**
+ * @desc    Reset password
+ * @route   POST /api/auth/reset-password/:token
+ * @access  Public
+ */
+export const resetPassword = async (req, res, next) => {
+  try {
+    const { token } = req.params;
+    const { password } = req.body;
+
+    // Hash token to compare with stored hash
+    const resetPasswordToken = crypto
+      .createHash('sha256')
+      .update(token)
+      .digest('hex');
+
+    const user = await User.findOne({
+      resetPasswordToken,
+      resetPasswordExpire: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          message: 'Invalid or expired reset token',
+        },
+      });
+    }
+
+    // Set new password
+    user.password = password;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
+    await user.save();
+
+    // Generate new token and set cookie
+    const jwtToken = generateToken(user._id);
+    setAuthCookie(res, jwtToken);
+
+    logger.info(`Password reset successful for user: ${user.email}`);
+
+    res.status(200).json({
+      success: true,
+      message: 'Password reset successful',
+    });
+  } catch (error) {
+    logger.error(`Reset password error: ${error.message}`);
+    next(error);
+  }
+};
