@@ -1,26 +1,43 @@
 import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import logger from '../utils/logger.js';
 import Organization from '../models/Organization.js';
 
 /**
- * Create reusable transporter object using SMTP
+ * Email service with support for Resend API (recommended) and SMTP fallback
  * 
  * NOTE: Render's free tier blocks outbound SMTP connections.
- * For production, consider using an email API service like:
- * - Resend (https://resend.com) - Recommended, simple API
- * - SendGrid (https://sendgrid.com)
- * - Mailgun (https://mailgun.com)
+ * Use Resend API (https://resend.com) for production - it's simple, reliable, and works on Render.
+ * 
+ * To use Resend:
+ * 1. Sign up at https://resend.com
+ * 2. Get your API key
+ * 3. Set RESEND_API_KEY environment variable
+ * 4. Set RESEND_FROM_EMAIL (e.g., "onboarding@resend.dev" or your verified domain)
+ * 
+ * SMTP will be used as fallback if Resend is not configured.
+ */
+
+// Initialize Resend client if API key is available
+let resendClient = null;
+if (process.env.RESEND_API_KEY) {
+  try {
+    resendClient = new Resend(process.env.RESEND_API_KEY);
+    logger.info('Resend client initialized', {
+      hasApiKey: !!process.env.RESEND_API_KEY,
+      fromEmail: process.env.RESEND_FROM_EMAIL || 'NOT SET',
+    });
+  } catch (error) {
+    logger.error('Failed to initialize Resend client', { error: error.message });
+  }
+}
+
+/**
+ * Create reusable transporter object using SMTP (fallback method)
  */
 const createTransporter = () => {
-  // If SMTP is not configured, return null (email sending will be skipped)
+  // If SMTP is not configured, return null
   if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    logger.error('SMTP not configured. Missing required environment variables.', {
-      hasSmtpHost: !!process.env.SMTP_HOST,
-      hasSmtpUser: !!process.env.SMTP_USER,
-      hasSmtpPass: !!process.env.SMTP_PASS,
-      smtpHost: process.env.SMTP_HOST || 'NOT SET',
-      smtpUser: process.env.SMTP_USER || 'NOT SET',
-    });
     return null;
   }
 
@@ -30,28 +47,23 @@ const createTransporter = () => {
   const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
     port: port,
-    secure: isSecure, // true for 465, false for other ports
+    secure: isSecure,
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS,
     },
-    // Increased timeouts for better reliability
-    connectionTimeout: 60000, // 60 seconds - increased from 10s
-    greetingTimeout: 30000, // 30 seconds - increased from 10s
-    socketTimeout: 60000, // 60 seconds - increased from 10s
-    // TLS options for Gmail and other secure SMTP servers
+    connectionTimeout: 60000,
+    greetingTimeout: 30000,
+    socketTimeout: 60000,
     tls: {
-      rejectUnauthorized: true, // Verify SSL certificates
-      minVersion: 'TLSv1.2', // Minimum TLS version
+      rejectUnauthorized: true,
+      minVersion: 'TLSv1.2',
     },
-    // Connection pool options
     pool: true,
     maxConnections: 1,
     maxMessages: 3,
-    // Rate limiting
     rateDelta: 1000,
     rateLimit: 5,
-    // Debug mode (set to true for more verbose logging)
     debug: process.env.NODE_ENV === 'development',
     logger: process.env.NODE_ENV === 'development',
   });
@@ -66,7 +78,7 @@ const createTransporter = () => {
 };
 
 /**
- * Send password reset email
+ * Send password reset email using Resend API or SMTP fallback
  * @param {string} email - Recipient email
  * @param {string} resetToken - Password reset token
  */
@@ -75,71 +87,92 @@ export const sendPasswordResetEmail = async (email, resetToken) => {
   console.log('Email:', email);
   console.log('Token length:', resetToken?.length);
   
-  const transporter = createTransporter();
+  const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password/${resetToken}`;
   
-  console.log('Transporter created:', !!transporter);
+  const emailContent = {
+    subject: 'Password Reset Request',
+    text: `You requested a password reset. Please click the following link to reset your password:\n\n${resetUrl}\n\nThis link will expire in 1 hour.\n\nIf you did not request this, please ignore this email.`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>Password Reset Request</h2>
+        <p>You requested a password reset for your account.</p>
+        <p>Please click the following link to reset your password:</p>
+        <p><a href="${resetUrl}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Reset Password</a></p>
+        <p>Or copy and paste this URL into your browser:</p>
+        <p style="word-break: break-all;">${resetUrl}</p>
+        <p><strong>This link will expire in 1 hour.</strong></p>
+        <p>If you did not request this password reset, please ignore this email.</p>
+      </div>
+    `,
+  };
+
+  // Try Resend first (recommended for Render)
+  if (resendClient && process.env.RESEND_FROM_EMAIL) {
+    try {
+      logger.info('Sending password reset email via Resend', { email });
+      
+      const { data, error } = await resendClient.emails.send({
+        from: process.env.RESEND_FROM_EMAIL,
+        to: email,
+        subject: emailContent.subject,
+        html: emailContent.html,
+        text: emailContent.text,
+      });
+
+      if (error) {
+        throw new Error(`Resend API error: ${error.message}`);
+      }
+
+      logger.info('Password reset email sent successfully via Resend', {
+        email,
+        messageId: data?.id,
+      });
+
+      console.log('Email sent via Resend! Message ID:', data?.id);
+      return { messageId: data?.id, response: 'Sent via Resend' };
+    } catch (error) {
+      logger.error('Resend email send failed, falling back to SMTP', {
+        error: error.message,
+        email,
+      });
+      // Fall through to SMTP fallback
+    }
+  }
+
+  // Fallback to SMTP
+  logger.info('Using SMTP fallback for password reset email', { email });
+  const transporter = createTransporter();
 
   if (!transporter) {
-    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password/${resetToken}`;
-    console.error('=== SMTP NOT CONFIGURED ===');
-    console.error('SMTP_HOST:', process.env.SMTP_HOST || 'NOT SET');
-    console.error('SMTP_USER:', process.env.SMTP_USER || 'NOT SET');
-    console.error('SMTP_PASS:', process.env.SMTP_PASS ? 'SET' : 'NOT SET');
-    
-    logger.error('SMTP not configured. Cannot send password reset email.', {
-      email,
-      resetToken,
-      resetUrl,
-      smtpHost: process.env.SMTP_HOST,
-      smtpUser: process.env.SMTP_USER,
+    logger.error('Neither Resend nor SMTP is configured', {
+      hasResend: !!resendClient,
+      hasResendFromEmail: !!process.env.RESEND_FROM_EMAIL,
+      hasSmtpHost: !!process.env.SMTP_HOST,
+      hasSmtpUser: !!process.env.SMTP_USER,
       hasSmtpPass: !!process.env.SMTP_PASS,
     });
-    // Throw error so controller can handle it properly
-    throw new Error('SMTP not configured. Please configure SMTP settings in environment variables.');
+    throw new Error('Email service not configured. Please configure RESEND_API_KEY and RESEND_FROM_EMAIL, or SMTP settings.');
   }
 
   try {
-    // Skip SMTP verification - Render blocks outbound SMTP connections
-    // We'll try to send directly instead
-    console.log('Skipping SMTP verification (Render blocks SMTP connections)');
-    logger.info('Skipping SMTP verification - attempting direct send');
-
-    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password/${resetToken}`;
-
     const mailOptions = {
       from: `"Multi-Tenant SaaS" <${process.env.SMTP_USER}>`,
       to: email,
-      subject: 'Password Reset Request',
-      text: `You requested a password reset. Please click the following link to reset your password:\n\n${resetUrl}\n\nThis link will expire in 1 hour.\n\nIf you did not request this, please ignore this email.`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2>Password Reset Request</h2>
-          <p>You requested a password reset for your account.</p>
-          <p>Please click the following link to reset your password:</p>
-          <p><a href="${resetUrl}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Reset Password</a></p>
-          <p>Or copy and paste this URL into your browser:</p>
-          <p style="word-break: break-all;">${resetUrl}</p>
-          <p><strong>This link will expire in 1 hour.</strong></p>
-          <p>If you did not request this password reset, please ignore this email.</p>
-        </div>
-      `,
+      subject: emailContent.subject,
+      text: emailContent.text,
+      html: emailContent.html,
     };
 
-    console.log('Sending password reset email...');
-    console.log('To:', email);
-    console.log('From:', process.env.SMTP_USER);
+    logger.info('Sending password reset email via SMTP', { to: email, from: process.env.SMTP_USER });
     
-    logger.info('Sending password reset email', { to: email, from: process.env.SMTP_USER });
-    
-    // Retry logic with exponential backoff
+    // Retry logic with exponential backoff for SMTP
     const maxRetries = 3;
     let lastError;
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        logger.info(`Attempting to send email (attempt ${attempt}/${maxRetries})`, { email });
+        logger.info(`Attempting to send email via SMTP (attempt ${attempt}/${maxRetries})`, { email });
         
-        // Increased timeout to 60 seconds to match connection timeout
         const sendWithTimeout = Promise.race([
           transporter.sendMail(mailOptions),
           new Promise((_, reject) =>
@@ -149,127 +182,149 @@ export const sendPasswordResetEmail = async (email, resetToken) => {
 
         const info = await sendWithTimeout;
         
-        console.log('Email sent! Message ID:', info.messageId);
-        console.log('Response:', info.response);
-        
-        logger.info(`Password reset email sent successfully`, {
+        logger.info(`Password reset email sent successfully via SMTP`, {
           email,
           messageId: info.messageId,
           response: info.response,
           attempt,
         });
         
-        return info; // Success, return the info object
+        console.log('Email sent via SMTP! Message ID:', info.messageId);
+        return info;
       } catch (error) {
         lastError = error;
         const isTimeout = error.code === 'ETIMEDOUT' || error.message?.includes('timeout');
         const isConnectionError = error.code === 'ECONNREFUSED' || error.code === 'ECONNRESET';
         
-        logger.warn(`Email send attempt ${attempt} failed`, {
+        logger.warn(`SMTP email send attempt ${attempt} failed`, {
           error: error.message,
           code: error.code,
           attempt,
           willRetry: attempt < maxRetries && (isTimeout || isConnectionError),
         });
         
-        // Only retry on timeout or connection errors, and if we have retries left
         if (attempt < maxRetries && (isTimeout || isConnectionError)) {
-          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000); // Exponential backoff, max 10s
-          logger.info(`Retrying email send after ${delay}ms`, { attempt: attempt + 1 });
+          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
+          logger.info(`Retrying SMTP email send after ${delay}ms`, { attempt: attempt + 1 });
           await new Promise(resolve => setTimeout(resolve, delay));
           continue;
         }
         
-        // If it's not a retryable error or we're out of retries, throw
         throw error;
       }
     }
     
-    // If we get here, all retries failed
     throw lastError;
   } catch (error) {
     console.error('=== SMTP ERROR ===');
     console.error('Error message:', error.message);
     console.error('Error code:', error.code);
-    console.error('Error command:', error.command);
-    console.error('Error response:', error.response);
-    console.error('Error responseCode:', error.responseCode);
     console.error('Error stack:', error.stack);
-    console.error('Error name:', error.name);
-    console.error('Is timeout?:', error.message?.includes('timeout'));
     
-    logger.error(`Error sending password reset email`, {
+    logger.error(`Error sending password reset email via SMTP`, {
       error: error.message,
       stack: error.stack,
       code: error.code,
-      command: error.command,
-      response: error.response,
-      responseCode: error.responseCode,
-      name: error.name,
     });
     throw new Error(`Email could not be sent: ${error.message}`);
   }
 };
 
 /**
- * Send invitation email
+ * Send invitation email using Resend API or SMTP fallback
  * @param {string} email - Recipient email
  * @param {string} invitationToken - Invitation token
  * @param {string} organizationId - Organization ID
  */
 export const sendInvitationEmail = async (email, invitationToken, organizationId) => {
+  // Get organization name for email
+  const organization = await Organization.findById(organizationId);
+  const orgName = organization ? organization.name : 'the organization';
+
+  const acceptUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/accept-invitation/${invitationToken}`;
+
+  const emailContent = {
+    subject: `Invitation to join ${orgName}`,
+    text: `You have been invited to join ${orgName}.\n\nPlease click the following link to accept the invitation:\n\n${acceptUrl}\n\nThis invitation will expire in 7 days.\n\nIf you did not expect this invitation, please ignore this email.`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>You've been invited!</h2>
+        <p>You have been invited to join <strong>${orgName}</strong>.</p>
+        <p>Please click the following link to accept the invitation:</p>
+        <p><a href="${acceptUrl}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Accept Invitation</a></p>
+        <p>Or copy and paste this URL into your browser:</p>
+        <p style="word-break: break-all;">${acceptUrl}</p>
+        <p><strong>This invitation will expire in 7 days.</strong></p>
+        <p>If you did not expect this invitation, please ignore this email.</p>
+      </div>
+    `,
+  };
+
+  // Try Resend first (recommended for Render)
+  if (resendClient && process.env.RESEND_FROM_EMAIL) {
+    try {
+      logger.info('Sending invitation email via Resend', { email, organizationId });
+      
+      const { data, error } = await resendClient.emails.send({
+        from: process.env.RESEND_FROM_EMAIL,
+        to: email,
+        subject: emailContent.subject,
+        html: emailContent.html,
+        text: emailContent.text,
+      });
+
+      if (error) {
+        throw new Error(`Resend API error: ${error.message}`);
+      }
+
+      logger.info('Invitation email sent successfully via Resend', {
+        email,
+        organizationId,
+        messageId: data?.id,
+      });
+
+      return { messageId: data?.id, response: 'Sent via Resend' };
+    } catch (error) {
+      logger.error('Resend email send failed, falling back to SMTP', {
+        error: error.message,
+        email,
+      });
+      // Fall through to SMTP fallback
+    }
+  }
+
+  // Fallback to SMTP
+  logger.info('Using SMTP fallback for invitation email', { email });
   const transporter = createTransporter();
 
   if (!transporter) {
-    const acceptUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/accept-invitation/${invitationToken}`;
-    logger.error('SMTP not configured. Cannot send invitation email.', {
-      email,
-      invitationToken,
-      organizationId,
-      acceptUrl,
-      smtpHost: process.env.SMTP_HOST,
-      smtpUser: process.env.SMTP_USER,
+    logger.error('Neither Resend nor SMTP is configured', {
+      hasResend: !!resendClient,
+      hasResendFromEmail: !!process.env.RESEND_FROM_EMAIL,
+      hasSmtpHost: !!process.env.SMTP_HOST,
+      hasSmtpUser: !!process.env.SMTP_USER,
       hasSmtpPass: !!process.env.SMTP_PASS,
     });
-    // Throw error so controller can handle it properly
-    throw new Error('SMTP not configured. Please configure SMTP settings in environment variables.');
+    throw new Error('Email service not configured. Please configure RESEND_API_KEY and RESEND_FROM_EMAIL, or SMTP settings.');
   }
 
   try {
-    // Get organization name for email
-    const organization = await Organization.findById(organizationId);
-    const orgName = organization ? organization.name : 'the organization';
-
-    const acceptUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/accept-invitation/${invitationToken}`;
-
     const mailOptions = {
       from: `"Multi-Tenant SaaS" <${process.env.SMTP_USER}>`,
       to: email,
-      subject: `Invitation to join ${orgName}`,
-      text: `You have been invited to join ${orgName}.\n\nPlease click the following link to accept the invitation:\n\n${acceptUrl}\n\nThis invitation will expire in 7 days.\n\nIf you did not expect this invitation, please ignore this email.`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2>You've been invited!</h2>
-          <p>You have been invited to join <strong>${orgName}</strong>.</p>
-          <p>Please click the following link to accept the invitation:</p>
-          <p><a href="${acceptUrl}" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Accept Invitation</a></p>
-          <p>Or copy and paste this URL into your browser:</p>
-          <p style="word-break: break-all;">${acceptUrl}</p>
-          <p><strong>This invitation will expire in 7 days.</strong></p>
-          <p>If you did not expect this invitation, please ignore this email.</p>
-        </div>
-      `,
+      subject: emailContent.subject,
+      text: emailContent.text,
+      html: emailContent.html,
     };
 
-    // Retry logic with exponential backoff
+    // Retry logic with exponential backoff for SMTP
     const maxRetries = 3;
     let lastError;
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        logger.info(`Attempting to send invitation email (attempt ${attempt}/${maxRetries})`, { email });
+        logger.info(`Attempting to send invitation email via SMTP (attempt ${attempt}/${maxRetries})`, { email });
         
-        // Increased timeout to 60 seconds to match connection timeout
         const sendWithTimeout = Promise.race([
           transporter.sendMail(mailOptions),
           new Promise((_, reject) =>
@@ -279,42 +334,40 @@ export const sendInvitationEmail = async (email, invitationToken, organizationId
 
         const info = await sendWithTimeout;
         
-        logger.info(`Invitation email sent successfully to ${email}`, {
+        logger.info(`Invitation email sent successfully via SMTP`, {
+          email,
           messageId: info.messageId,
           response: info.response,
           attempt,
         });
         
-        return info; // Success, return the info object
+        return info;
       } catch (error) {
         lastError = error;
         const isTimeout = error.code === 'ETIMEDOUT' || error.message?.includes('timeout');
         const isConnectionError = error.code === 'ECONNREFUSED' || error.code === 'ECONNRESET';
         
-        logger.warn(`Invitation email send attempt ${attempt} failed`, {
+        logger.warn(`SMTP invitation email send attempt ${attempt} failed`, {
           error: error.message,
           code: error.code,
           attempt,
           willRetry: attempt < maxRetries && (isTimeout || isConnectionError),
         });
         
-        // Only retry on timeout or connection errors, and if we have retries left
         if (attempt < maxRetries && (isTimeout || isConnectionError)) {
-          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000); // Exponential backoff, max 10s
-          logger.info(`Retrying invitation email send after ${delay}ms`, { attempt: attempt + 1 });
+          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
+          logger.info(`Retrying SMTP invitation email send after ${delay}ms`, { attempt: attempt + 1 });
           await new Promise(resolve => setTimeout(resolve, delay));
           continue;
         }
         
-        // If it's not a retryable error or we're out of retries, throw
         throw error;
       }
     }
     
-    // If we get here, all retries failed
     throw lastError;
   } catch (error) {
-    logger.error(`Error sending invitation email: ${error.message}`, {
+    logger.error(`Error sending invitation email via SMTP: ${error.message}`, {
       error: error.message,
       stack: error.stack,
       code: error.code,
