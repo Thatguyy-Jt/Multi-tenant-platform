@@ -4,6 +4,12 @@ import Organization from '../models/Organization.js';
 
 /**
  * Create reusable transporter object using SMTP
+ * 
+ * NOTE: Render's free tier blocks outbound SMTP connections.
+ * For production, consider using an email API service like:
+ * - Resend (https://resend.com) - Recommended, simple API
+ * - SendGrid (https://sendgrid.com)
+ * - Mailgun (https://mailgun.com)
  */
 const createTransporter = () => {
   // If SMTP is not configured, return null (email sending will be skipped)
@@ -75,21 +81,10 @@ export const sendPasswordResetEmail = async (email, resetToken) => {
   }
 
   try {
-    // Verify SMTP connection before sending (with timeout to avoid hanging)
-    console.log('Verifying SMTP connection...');
-    logger.info('Verifying SMTP connection...');
-
-    const verifyWithTimeout = Promise.race([
-      transporter.verify(),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('SMTP verify timeout after 8s')), 8000)
-      ),
-    ]);
-
-    await verifyWithTimeout;
-
-    console.log('SMTP connection verified successfully');
-    logger.info('SMTP connection verified successfully');
+    // Skip SMTP verification - Render blocks outbound SMTP connections
+    // We'll try to send directly instead
+    console.log('Skipping SMTP verification (Render blocks SMTP connections)');
+    logger.info('Skipping SMTP verification - attempting direct send');
 
     const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password/${resetToken}`;
 
@@ -118,10 +113,11 @@ export const sendPasswordResetEmail = async (email, resetToken) => {
     
     logger.info('Sending password reset email', { to: email, from: process.env.SMTP_USER });
     
+    // Increase timeout for Render's network restrictions
     const sendWithTimeout = Promise.race([
       transporter.sendMail(mailOptions),
       new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('SMTP send timeout after 12s')), 12000)
+        setTimeout(() => reject(new Error('SMTP send timeout after 15s')), 15000)
       ),
     ]);
 
