@@ -24,18 +24,36 @@ const createTransporter = () => {
     return null;
   }
 
+  const port = parseInt(process.env.SMTP_PORT || '587', 10);
+  const isSecure = port === 465;
+
   const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
-    port: parseInt(process.env.SMTP_PORT || '587', 10),
-    secure: process.env.SMTP_PORT == 465, // true for 465, false for other ports
+    port: port,
+    secure: isSecure, // true for 465, false for other ports
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS,
     },
-    // Add connection timeout
-    connectionTimeout: 10000, // 10 seconds
-    greetingTimeout: 10000,
-    socketTimeout: 10000,
+    // Increased timeouts for better reliability
+    connectionTimeout: 60000, // 60 seconds - increased from 10s
+    greetingTimeout: 30000, // 30 seconds - increased from 10s
+    socketTimeout: 60000, // 60 seconds - increased from 10s
+    // TLS options for Gmail and other secure SMTP servers
+    tls: {
+      rejectUnauthorized: true, // Verify SSL certificates
+      minVersion: 'TLSv1.2', // Minimum TLS version
+    },
+    // Connection pool options
+    pool: true,
+    maxConnections: 1,
+    maxMessages: 3,
+    // Rate limiting
+    rateDelta: 1000,
+    rateLimit: 5,
+    // Debug mode (set to true for more verbose logging)
+    debug: process.env.NODE_ENV === 'development',
+    logger: process.env.NODE_ENV === 'development',
   });
 
   logger.info('SMTP transporter created', {
@@ -113,24 +131,62 @@ export const sendPasswordResetEmail = async (email, resetToken) => {
     
     logger.info('Sending password reset email', { to: email, from: process.env.SMTP_USER });
     
-    // Increase timeout for Render's network restrictions
-    const sendWithTimeout = Promise.race([
-      transporter.sendMail(mailOptions),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('SMTP send timeout after 15s')), 15000)
-      ),
-    ]);
+    // Retry logic with exponential backoff
+    const maxRetries = 3;
+    let lastError;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        logger.info(`Attempting to send email (attempt ${attempt}/${maxRetries})`, { email });
+        
+        // Increased timeout to 60 seconds to match connection timeout
+        const sendWithTimeout = Promise.race([
+          transporter.sendMail(mailOptions),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('SMTP send timeout after 60s')), 60000)
+          ),
+        ]);
 
-    const info = await sendWithTimeout;
+        const info = await sendWithTimeout;
+        
+        console.log('Email sent! Message ID:', info.messageId);
+        console.log('Response:', info.response);
+        
+        logger.info(`Password reset email sent successfully`, {
+          email,
+          messageId: info.messageId,
+          response: info.response,
+          attempt,
+        });
+        
+        return info; // Success, return the info object
+      } catch (error) {
+        lastError = error;
+        const isTimeout = error.code === 'ETIMEDOUT' || error.message?.includes('timeout');
+        const isConnectionError = error.code === 'ECONNREFUSED' || error.code === 'ECONNRESET';
+        
+        logger.warn(`Email send attempt ${attempt} failed`, {
+          error: error.message,
+          code: error.code,
+          attempt,
+          willRetry: attempt < maxRetries && (isTimeout || isConnectionError),
+        });
+        
+        // Only retry on timeout or connection errors, and if we have retries left
+        if (attempt < maxRetries && (isTimeout || isConnectionError)) {
+          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000); // Exponential backoff, max 10s
+          logger.info(`Retrying email send after ${delay}ms`, { attempt: attempt + 1 });
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        
+        // If it's not a retryable error or we're out of retries, throw
+        throw error;
+      }
+    }
     
-    console.log('Email sent! Message ID:', info.messageId);
-    console.log('Response:', info.response);
-    
-    logger.info(`Password reset email sent successfully`, {
-      email,
-      messageId: info.messageId,
-      response: info.response,
-    });
+    // If we get here, all retries failed
+    throw lastError;
   } catch (error) {
     console.error('=== SMTP ERROR ===');
     console.error('Error message:', error.message);
@@ -205,10 +261,64 @@ export const sendInvitationEmail = async (email, invitationToken, organizationId
       `,
     };
 
-    await transporter.sendMail(mailOptions);
-    logger.info(`Invitation email sent to ${email}`);
+    // Retry logic with exponential backoff
+    const maxRetries = 3;
+    let lastError;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        logger.info(`Attempting to send invitation email (attempt ${attempt}/${maxRetries})`, { email });
+        
+        // Increased timeout to 60 seconds to match connection timeout
+        const sendWithTimeout = Promise.race([
+          transporter.sendMail(mailOptions),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('SMTP send timeout after 60s')), 60000)
+          ),
+        ]);
+
+        const info = await sendWithTimeout;
+        
+        logger.info(`Invitation email sent successfully to ${email}`, {
+          messageId: info.messageId,
+          response: info.response,
+          attempt,
+        });
+        
+        return info; // Success, return the info object
+      } catch (error) {
+        lastError = error;
+        const isTimeout = error.code === 'ETIMEDOUT' || error.message?.includes('timeout');
+        const isConnectionError = error.code === 'ECONNREFUSED' || error.code === 'ECONNRESET';
+        
+        logger.warn(`Invitation email send attempt ${attempt} failed`, {
+          error: error.message,
+          code: error.code,
+          attempt,
+          willRetry: attempt < maxRetries && (isTimeout || isConnectionError),
+        });
+        
+        // Only retry on timeout or connection errors, and if we have retries left
+        if (attempt < maxRetries && (isTimeout || isConnectionError)) {
+          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000); // Exponential backoff, max 10s
+          logger.info(`Retrying invitation email send after ${delay}ms`, { attempt: attempt + 1 });
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        
+        // If it's not a retryable error or we're out of retries, throw
+        throw error;
+      }
+    }
+    
+    // If we get here, all retries failed
+    throw lastError;
   } catch (error) {
-    logger.error(`Error sending invitation email: ${error.message}`);
-    throw new Error('Email could not be sent');
+    logger.error(`Error sending invitation email: ${error.message}`, {
+      error: error.message,
+      stack: error.stack,
+      code: error.code,
+    });
+    throw new Error(`Email could not be sent: ${error.message}`);
   }
 };
