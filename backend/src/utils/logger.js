@@ -90,8 +90,11 @@ logger.add(
           winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
           winston.format.printf(({ timestamp, level, message, ...meta }) => {
             let msg = `${timestamp} [${level.toUpperCase()}]: ${message}`;
-            if (Object.keys(meta).length > 0) {
-              msg += ` ${JSON.stringify(meta, null, 2)}`;
+            const extra = { ...meta };
+            delete extra.level;
+            delete extra.message;
+            if (Object.keys(extra).length > 0) {
+              msg += ` ${JSON.stringify(extra)}`;
             }
             return msg;
           })

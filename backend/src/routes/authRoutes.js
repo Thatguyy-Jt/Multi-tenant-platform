@@ -21,11 +21,15 @@ const router = express.Router();
 
 // Log all requests to auth routes for debugging
 router.use((req, res, next) => {
-  console.log(`[AUTH ROUTE] ${req.method} ${req.path}`, {
-    origin: req.get('origin'),
-    ip: req.ip,
-    hasBody: !!req.body,
-  });
+  try {
+    console.log(`[AUTH ROUTE] ${req.method} ${req.path}`, {
+      origin: req.get('origin'),
+      ip: req.ip,
+      hasBody: !!req.body,
+    });
+  } catch (e) {
+    // avoid log crashes
+  }
   logger.info(`Auth route accessed: ${req.method} ${req.path}`, {
     origin: req.get('origin'),
     ip: req.ip,

@@ -75,12 +75,19 @@ export const sendPasswordResetEmail = async (email, resetToken) => {
   }
 
   try {
-    // Verify SMTP connection before sending
+    // Verify SMTP connection before sending (with timeout to avoid hanging)
     console.log('Verifying SMTP connection...');
     logger.info('Verifying SMTP connection...');
-    
-    await transporter.verify();
-    
+
+    const verifyWithTimeout = Promise.race([
+      transporter.verify(),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('SMTP verify timeout after 8s')), 8000)
+      ),
+    ]);
+
+    await verifyWithTimeout;
+
     console.log('SMTP connection verified successfully');
     logger.info('SMTP connection verified successfully');
 
@@ -111,7 +118,14 @@ export const sendPasswordResetEmail = async (email, resetToken) => {
     
     logger.info('Sending password reset email', { to: email, from: process.env.SMTP_USER });
     
-    const info = await transporter.sendMail(mailOptions);
+    const sendWithTimeout = Promise.race([
+      transporter.sendMail(mailOptions),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('SMTP send timeout after 12s')), 12000)
+      ),
+    ]);
+
+    const info = await sendWithTimeout;
     
     console.log('Email sent! Message ID:', info.messageId);
     console.log('Response:', info.response);
@@ -129,6 +143,8 @@ export const sendPasswordResetEmail = async (email, resetToken) => {
     console.error('Error response:', error.response);
     console.error('Error responseCode:', error.responseCode);
     console.error('Error stack:', error.stack);
+    console.error('Error name:', error.name);
+    console.error('Is timeout?:', error.message?.includes('timeout'));
     
     logger.error(`Error sending password reset email`, {
       error: error.message,
@@ -137,6 +153,7 @@ export const sendPasswordResetEmail = async (email, resetToken) => {
       command: error.command,
       response: error.response,
       responseCode: error.responseCode,
+      name: error.name,
     });
     throw new Error(`Email could not be sent: ${error.message}`);
   }

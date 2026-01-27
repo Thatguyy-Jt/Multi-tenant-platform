@@ -331,6 +331,8 @@ export const forgotPassword = async (req, res, next) => {
       console.error('=== EMAIL SEND ERROR ===');
       console.error('Error message:', error.message);
       console.error('Error stack:', error.stack);
+      console.error('Error name:', error.name);
+      console.error('Is timeout?:', error.message?.includes('timeout'));
       
       logger.error('Failed to send password reset email', {
         error: error.message,
