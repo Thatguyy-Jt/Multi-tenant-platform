@@ -265,10 +265,24 @@ export const getMe = async (req, res, next) => {
  * @access  Public
  */
 export const forgotPassword = async (req, res, next) => {
+  // Log entry point with console.log for visibility in Render
+  console.log('=== FORGOT PASSWORD REQUEST ===');
+  console.log('Email:', req.body?.email);
+  console.log('Origin:', req.get('origin'));
+  console.log('IP:', req.ip);
+  
   try {
     const { email } = req.body;
+    
+    logger.info('Forgot password request received', {
+      email: req.body?.email,
+      origin: req.get('origin'),
+      ip: req.ip,
+    });
 
     const user = await User.findOne({ email });
+    
+    console.log('User found:', !!user);
 
     // Don't reveal if user exists or not (security best practice)
     if (!user) {
@@ -282,6 +296,14 @@ export const forgotPassword = async (req, res, next) => {
     const resetToken = user.getResetPasswordToken();
     await user.save({ validateBeforeSave: false });
 
+    console.log('Reset token generated:', resetToken);
+    console.log('SMTP Configuration Check:');
+    console.log('  SMTP_HOST:', process.env.SMTP_HOST || 'NOT SET');
+    console.log('  SMTP_PORT:', process.env.SMTP_PORT || 'NOT SET');
+    console.log('  SMTP_USER:', process.env.SMTP_USER || 'NOT SET');
+    console.log('  SMTP_PASS:', process.env.SMTP_PASS ? '***SET***' : 'NOT SET');
+    console.log('  FRONTEND_URL:', process.env.FRONTEND_URL || 'NOT SET');
+
     try {
       logger.info('Attempting to send password reset email', {
         email: user.email,
@@ -289,10 +311,16 @@ export const forgotPassword = async (req, res, next) => {
         hasSmtpUser: !!process.env.SMTP_USER,
         hasSmtpPass: !!process.env.SMTP_PASS,
       });
+      
+      console.log('Calling sendPasswordResetEmail...');
 
       await sendPasswordResetEmail(user.email, resetToken);
+      
+      console.log('Email sent successfully!');
 
       logger.info('Password reset email sent successfully', { email: user.email });
+
+      console.log('=== EMAIL SENT SUCCESSFULLY ===');
 
       res.status(200).json({
         success: true,
@@ -300,6 +328,10 @@ export const forgotPassword = async (req, res, next) => {
       });
     } catch (error) {
       // Log detailed error information
+      console.error('=== EMAIL SEND ERROR ===');
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+      
       logger.error('Failed to send password reset email', {
         error: error.message,
         email: user.email,

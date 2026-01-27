@@ -81,13 +81,23 @@ const logger = winston.createLogger({
   ],
 });
 
-// Add console transport in development
-if (process.env.NODE_ENV !== 'production') {
-  logger.add(
-    new winston.transports.Console({
-      format: consoleFormat,
-    })
-  );
-}
+// Always add console transport so logs appear in Render/Vercel
+// In production, use simple format; in development, use colored format
+logger.add(
+  new winston.transports.Console({
+    format: envConfig.isProduction 
+      ? winston.format.combine(
+          winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+          winston.format.printf(({ timestamp, level, message, ...meta }) => {
+            let msg = `${timestamp} [${level.toUpperCase()}]: ${message}`;
+            if (Object.keys(meta).length > 0) {
+              msg += ` ${JSON.stringify(meta, null, 2)}`;
+            }
+            return msg;
+          })
+        )
+      : consoleFormat,
+  })
+);
 
 export default logger;

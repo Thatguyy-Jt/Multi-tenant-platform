@@ -47,10 +47,21 @@ const createTransporter = () => {
  * @param {string} resetToken - Password reset token
  */
 export const sendPasswordResetEmail = async (email, resetToken) => {
+  console.log('=== sendPasswordResetEmail CALLED ===');
+  console.log('Email:', email);
+  console.log('Token length:', resetToken?.length);
+  
   const transporter = createTransporter();
+  
+  console.log('Transporter created:', !!transporter);
 
   if (!transporter) {
     const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password/${resetToken}`;
+    console.error('=== SMTP NOT CONFIGURED ===');
+    console.error('SMTP_HOST:', process.env.SMTP_HOST || 'NOT SET');
+    console.error('SMTP_USER:', process.env.SMTP_USER || 'NOT SET');
+    console.error('SMTP_PASS:', process.env.SMTP_PASS ? 'SET' : 'NOT SET');
+    
     logger.error('SMTP not configured. Cannot send password reset email.', {
       email,
       resetToken,
@@ -65,8 +76,12 @@ export const sendPasswordResetEmail = async (email, resetToken) => {
 
   try {
     // Verify SMTP connection before sending
+    console.log('Verifying SMTP connection...');
     logger.info('Verifying SMTP connection...');
+    
     await transporter.verify();
+    
+    console.log('SMTP connection verified successfully');
     logger.info('SMTP connection verified successfully');
 
     const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password/${resetToken}`;
@@ -90,14 +105,31 @@ export const sendPasswordResetEmail = async (email, resetToken) => {
       `,
     };
 
+    console.log('Sending password reset email...');
+    console.log('To:', email);
+    console.log('From:', process.env.SMTP_USER);
+    
     logger.info('Sending password reset email', { to: email, from: process.env.SMTP_USER });
+    
     const info = await transporter.sendMail(mailOptions);
+    
+    console.log('Email sent! Message ID:', info.messageId);
+    console.log('Response:', info.response);
+    
     logger.info(`Password reset email sent successfully`, {
       email,
       messageId: info.messageId,
       response: info.response,
     });
   } catch (error) {
+    console.error('=== SMTP ERROR ===');
+    console.error('Error message:', error.message);
+    console.error('Error code:', error.code);
+    console.error('Error command:', error.command);
+    console.error('Error response:', error.response);
+    console.error('Error responseCode:', error.responseCode);
+    console.error('Error stack:', error.stack);
+    
     logger.error(`Error sending password reset email`, {
       error: error.message,
       stack: error.stack,
