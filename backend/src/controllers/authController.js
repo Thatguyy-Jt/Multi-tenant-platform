@@ -283,17 +283,39 @@ export const forgotPassword = async (req, res, next) => {
     await user.save({ validateBeforeSave: false });
 
     try {
+      logger.info('Attempting to send password reset email', {
+        email: user.email,
+        hasSmtpHost: !!process.env.SMTP_HOST,
+        hasSmtpUser: !!process.env.SMTP_USER,
+        hasSmtpPass: !!process.env.SMTP_PASS,
+      });
+
       await sendPasswordResetEmail(user.email, resetToken);
+
+      logger.info('Password reset email sent successfully', { email: user.email });
 
       res.status(200).json({
         success: true,
         message: 'If that email exists, a password reset link has been sent',
       });
     } catch (error) {
+      // Log detailed error information
+      logger.error('Failed to send password reset email', {
+        error: error.message,
+        email: user.email,
+        resetToken,
+        resetUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password/${resetToken}`,
+        smtpConfig: {
+          host: process.env.SMTP_HOST,
+          port: process.env.SMTP_PORT,
+          user: process.env.SMTP_USER,
+          hasPass: !!process.env.SMTP_PASS,
+        },
+      });
+      
       // Log the reset token for testing purposes when email fails
-      logger.warn(`Failed to send password reset email: ${error.message}`);
       logger.info(`Password reset token for testing: ${resetToken}`);
-      logger.info(`Reset URL: ${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`);
+      logger.info(`Reset URL: ${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password/${resetToken}`);
       
       // Don't clear the token - keep it so users can test the reset flow
       // The token will expire naturally after the expiry time
@@ -305,8 +327,9 @@ export const forgotPassword = async (req, res, next) => {
         ...(process.env.NODE_ENV !== 'production' && {
           debug: {
             resetToken,
-            resetUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`,
+            resetUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password/${resetToken}`,
             note: 'Token included for development testing only',
+            error: error.message,
           },
         }),
       });

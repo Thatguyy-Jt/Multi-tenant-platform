@@ -8,19 +8,37 @@ import Organization from '../models/Organization.js';
 const createTransporter = () => {
   // If SMTP is not configured, return null (email sending will be skipped)
   if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    logger.warn('SMTP not configured. Email sending will be skipped.');
+    logger.error('SMTP not configured. Missing required environment variables.', {
+      hasSmtpHost: !!process.env.SMTP_HOST,
+      hasSmtpUser: !!process.env.SMTP_USER,
+      hasSmtpPass: !!process.env.SMTP_PASS,
+      smtpHost: process.env.SMTP_HOST || 'NOT SET',
+      smtpUser: process.env.SMTP_USER || 'NOT SET',
+    });
     return null;
   }
 
-  return nodemailer.createTransport({
+  const transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST,
-    port: process.env.SMTP_PORT || 587,
+    port: parseInt(process.env.SMTP_PORT || '587', 10),
     secure: process.env.SMTP_PORT == 465, // true for 465, false for other ports
     auth: {
       user: process.env.SMTP_USER,
       pass: process.env.SMTP_PASS,
     },
+    // Add connection timeout
+    connectionTimeout: 10000, // 10 seconds
+    greetingTimeout: 10000,
+    socketTimeout: 10000,
   });
+
+  logger.info('SMTP transporter created', {
+    host: process.env.SMTP_HOST,
+    port: process.env.SMTP_PORT || 587,
+    user: process.env.SMTP_USER,
+  });
+
+  return transporter;
 };
 
 /**
@@ -32,13 +50,25 @@ export const sendPasswordResetEmail = async (email, resetToken) => {
   const transporter = createTransporter();
 
   if (!transporter) {
-    logger.warn(`Password reset email would be sent to ${email} with token: ${resetToken}`);
-    logger.warn('SMTP not configured. Please configure SMTP settings in .env file.');
-    logger.warn(`Reset URL: ${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password/${resetToken}`);
-    return; // Return successfully - email is logged instead
+    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password/${resetToken}`;
+    logger.error('SMTP not configured. Cannot send password reset email.', {
+      email,
+      resetToken,
+      resetUrl,
+      smtpHost: process.env.SMTP_HOST,
+      smtpUser: process.env.SMTP_USER,
+      hasSmtpPass: !!process.env.SMTP_PASS,
+    });
+    // Throw error so controller can handle it properly
+    throw new Error('SMTP not configured. Please configure SMTP settings in environment variables.');
   }
 
   try {
+    // Verify SMTP connection before sending
+    logger.info('Verifying SMTP connection...');
+    await transporter.verify();
+    logger.info('SMTP connection verified successfully');
+
     const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password/${resetToken}`;
 
     const mailOptions = {
@@ -60,11 +90,23 @@ export const sendPasswordResetEmail = async (email, resetToken) => {
       `,
     };
 
-    await transporter.sendMail(mailOptions);
-    logger.info(`Password reset email sent to ${email}`);
+    logger.info('Sending password reset email', { to: email, from: process.env.SMTP_USER });
+    const info = await transporter.sendMail(mailOptions);
+    logger.info(`Password reset email sent successfully`, {
+      email,
+      messageId: info.messageId,
+      response: info.response,
+    });
   } catch (error) {
-    logger.error(`Error sending password reset email: ${error.message}`);
-    throw new Error('Email could not be sent');
+    logger.error(`Error sending password reset email`, {
+      error: error.message,
+      stack: error.stack,
+      code: error.code,
+      command: error.command,
+      response: error.response,
+      responseCode: error.responseCode,
+    });
+    throw new Error(`Email could not be sent: ${error.message}`);
   }
 };
 
@@ -79,10 +121,17 @@ export const sendInvitationEmail = async (email, invitationToken, organizationId
 
   if (!transporter) {
     const acceptUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/accept-invitation/${invitationToken}`;
-    logger.warn(`Invitation email would be sent to ${email} with token: ${invitationToken}`);
-    logger.warn('SMTP not configured. Please configure SMTP settings in .env file.');
-    logger.warn(`Accept URL: ${acceptUrl}`);
-    return; // Return successfully - email is logged instead
+    logger.error('SMTP not configured. Cannot send invitation email.', {
+      email,
+      invitationToken,
+      organizationId,
+      acceptUrl,
+      smtpHost: process.env.SMTP_HOST,
+      smtpUser: process.env.SMTP_USER,
+      hasSmtpPass: !!process.env.SMTP_PASS,
+    });
+    // Throw error so controller can handle it properly
+    throw new Error('SMTP not configured. Please configure SMTP settings in environment variables.');
   }
 
   try {
