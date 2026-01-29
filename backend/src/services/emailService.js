@@ -4,19 +4,25 @@ import logger from '../utils/logger.js';
 import Organization from '../models/Organization.js';
 
 /**
- * Email service with support for Resend API (recommended) and SMTP fallback
+ * Email service using Resend API as primary method.
  * 
  * NOTE: Render's free tier blocks outbound SMTP connections.
- * Use Resend API (https://resend.com) for production - it's simple, reliable, and works on Render.
+ * Resend works on Render via HTTPS API calls.
+ * 
+ * LIMITATION: Resend in testing mode (without verified domain) only allows
+ * sending to the account owner's email (oluwatobilobashowale@gmail.com).
  * 
  * To use Resend:
  * 1. Sign up at https://resend.com
  * 2. Get your API key
  * 3. Set RESEND_API_KEY environment variable
- * 4. Set RESEND_FROM_EMAIL (e.g., "onboarding@resend.dev" or your verified domain)
+ * 4. Set RESEND_FROM_EMAIL (e.g., "onboarding@resend.dev")
  * 
- * SMTP will be used as fallback if Resend is not configured.
+ * SMTP will be used as fallback for local development only.
  */
+
+// Allowed recipient email for Resend testing mode
+const ALLOWED_RESEND_EMAIL = 'oluwatobilobashowale@gmail.com';
 
 // Initialize Resend client if API key is available
 let resendClient = null;
@@ -26,6 +32,7 @@ if (process.env.RESEND_API_KEY) {
     logger.info('Resend client initialized', {
       hasApiKey: !!process.env.RESEND_API_KEY,
       fromEmail: process.env.RESEND_FROM_EMAIL || 'NOT SET',
+      allowedRecipient: ALLOWED_RESEND_EMAIL,
     });
   } catch (error) {
     logger.error('Failed to initialize Resend client', { error: error.message });
@@ -106,8 +113,18 @@ export const sendPasswordResetEmail = async (email, resetToken) => {
     `,
   };
 
-  // Try Resend first (recommended for Render)
+  // PHASE 1: Try Resend first (primary method)
   if (resendClient && process.env.RESEND_FROM_EMAIL) {
+    // Check if email is allowed (Resend testing mode limitation)
+    if (email.toLowerCase() !== ALLOWED_RESEND_EMAIL.toLowerCase()) {
+      const errorMsg = `Resend is in testing mode and can only send to ${ALLOWED_RESEND_EMAIL}. Attempted to send to: ${email}`;
+      logger.warn('Resend email restriction', {
+        attemptedEmail: email,
+        allowedEmail: ALLOWED_RESEND_EMAIL,
+      });
+      throw new Error(errorMsg);
+    }
+
     try {
       logger.info('Sending password reset email via Resend', { email });
       
@@ -131,27 +148,37 @@ export const sendPasswordResetEmail = async (email, resetToken) => {
       console.log('Email sent via Resend! Message ID:', data?.id);
       return { messageId: data?.id, response: 'Sent via Resend' };
     } catch (error) {
-      logger.error('Resend email send failed, falling back to SMTP', {
-        error: error.message,
-        email,
-      });
-      // Fall through to SMTP fallback
+      const msg = (error && error.message) || '';
+      logger.error('Resend email send failed', { error: msg, email });
+
+      // In production, don't fall back to SMTP (it's blocked on Render)
+      const isProduction = process.env.NODE_ENV === 'production';
+      const disableSmtpFallback =
+        process.env.DISABLE_SMTP_FALLBACK === 'true' ||
+        process.env.EMAIL_SMTP_FALLBACK === 'false' ||
+        isProduction;
+
+      if (disableSmtpFallback) {
+        throw new Error(`Email could not be sent via Resend: ${msg}`);
+      }
+
+      // Otherwise (local dev), allow SMTP fallback
     }
   }
 
-  // Fallback to SMTP
+  // Fallback to SMTP (local development only)
   logger.info('Using SMTP fallback for password reset email', { email });
   const transporter = createTransporter();
 
   if (!transporter) {
-    logger.error('Neither Resend nor SMTP is configured', {
+    logger.error('Email service not configured', {
       hasResend: !!resendClient,
       hasResendFromEmail: !!process.env.RESEND_FROM_EMAIL,
       hasSmtpHost: !!process.env.SMTP_HOST,
       hasSmtpUser: !!process.env.SMTP_USER,
       hasSmtpPass: !!process.env.SMTP_PASS,
     });
-    throw new Error('Email service not configured. Please configure RESEND_API_KEY and RESEND_FROM_EMAIL, or SMTP settings.');
+    throw new Error('Email service not configured. Please configure RESEND_API_KEY and RESEND_FROM_EMAIL for production, or SMTP settings for local development.');
   }
 
   try {
@@ -260,8 +287,19 @@ export const sendInvitationEmail = async (email, invitationToken, organizationId
     `,
   };
 
-  // Try Resend first (recommended for Render)
+  // PHASE 1: Try Resend first (primary method)
   if (resendClient && process.env.RESEND_FROM_EMAIL) {
+    // Check if email is allowed (Resend testing mode limitation)
+    if (email.toLowerCase() !== ALLOWED_RESEND_EMAIL.toLowerCase()) {
+      const errorMsg = `Resend is in testing mode and can only send to ${ALLOWED_RESEND_EMAIL}. Attempted to send to: ${email}`;
+      logger.warn('Resend email restriction', {
+        attemptedEmail: email,
+        allowedEmail: ALLOWED_RESEND_EMAIL,
+        organizationId,
+      });
+      throw new Error(errorMsg);
+    }
+
     try {
       logger.info('Sending invitation email via Resend', { email, organizationId });
       
@@ -285,27 +323,37 @@ export const sendInvitationEmail = async (email, invitationToken, organizationId
 
       return { messageId: data?.id, response: 'Sent via Resend' };
     } catch (error) {
-      logger.error('Resend email send failed, falling back to SMTP', {
-        error: error.message,
-        email,
-      });
-      // Fall through to SMTP fallback
+      const msg = (error && error.message) || '';
+      logger.error('Resend email send failed', { error: msg, email });
+
+      // In production, don't fall back to SMTP (it's blocked on Render)
+      const isProduction = process.env.NODE_ENV === 'production';
+      const disableSmtpFallback =
+        process.env.DISABLE_SMTP_FALLBACK === 'true' ||
+        process.env.EMAIL_SMTP_FALLBACK === 'false' ||
+        isProduction;
+
+      if (disableSmtpFallback) {
+        throw new Error(`Email could not be sent via Resend: ${msg}`);
+      }
+
+      // Otherwise (local dev), allow SMTP fallback
     }
   }
 
-  // Fallback to SMTP
+  // Fallback to SMTP (local development only)
   logger.info('Using SMTP fallback for invitation email', { email });
   const transporter = createTransporter();
 
   if (!transporter) {
-    logger.error('Neither Resend nor SMTP is configured', {
+    logger.error('Email service not configured', {
       hasResend: !!resendClient,
       hasResendFromEmail: !!process.env.RESEND_FROM_EMAIL,
       hasSmtpHost: !!process.env.SMTP_HOST,
       hasSmtpUser: !!process.env.SMTP_USER,
       hasSmtpPass: !!process.env.SMTP_PASS,
     });
-    throw new Error('Email service not configured. Please configure RESEND_API_KEY and RESEND_FROM_EMAIL, or SMTP settings.');
+    throw new Error('Email service not configured. Please configure RESEND_API_KEY and RESEND_FROM_EMAIL for production, or SMTP settings for local development.');
   }
 
   try {
