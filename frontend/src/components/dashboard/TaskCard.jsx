@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { fadeInUp } from '../../lib/animations';
-import { CheckSquare, MoreVertical, Edit2, Trash2, Calendar, User, FolderKanban, AlertCircle } from 'lucide-react';
+import { CheckSquare, MoreVertical, Edit2, Trash2, Calendar, User, FolderKanban, AlertCircle, CheckCircle2 } from 'lucide-react';
 import Card from '../ui/Card';
 import Badge from '../ui/Badge';
 import { cn } from '../../lib/utils';
@@ -10,7 +10,9 @@ const TaskCard = ({
   task, 
   onEdit, 
   onDelete, 
+  onMarkAsDone,
   canDelete = false,
+  canMarkAsDone = false,
   delay = 0 
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -82,7 +84,7 @@ const TaskCard = ({
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-start gap-3 flex-1 min-w-0">
             <div className={cn(
-              "p-2 rounded-lg flex-shrink-0",
+              "p-2 rounded-lg shrink-0",
               task.status === 'done' ? "bg-emerald-500/10" : "bg-teal-500/10"
             )}>
               <CheckSquare className={cn(
@@ -114,42 +116,56 @@ const TaskCard = ({
             </div>
           </div>
 
-          {canDelete && (
-            <div className="relative flex-shrink-0" ref={menuRef}>
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Mark as Done button - only for admin/owner when task is not done */}
+            {canMarkAsDone && task.status !== 'done' && (
               <button
-                onClick={() => setMenuOpen(!menuOpen)}
-                className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
-                aria-label="Task options"
+                onClick={() => onMarkAsDone && onMarkAsDone(task)}
+                className="p-1.5 rounded-lg text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 transition-colors"
+                aria-label="Mark as done"
+                title="Mark as done"
               >
-                <MoreVertical className="w-4 h-4" />
+                <CheckCircle2 className="w-4 h-4" />
               </button>
+            )}
+            
+            {canDelete && (
+              <div className="relative" ref={menuRef}>
+                <button
+                  onClick={() => setMenuOpen(!menuOpen)}
+                  className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
+                  aria-label="Task options"
+                >
+                  <MoreVertical className="w-4 h-4" />
+                </button>
 
-              {menuOpen && (
-                <div className="absolute right-0 top-8 w-40 rounded-lg bg-[#0F0F11] border border-white/10 shadow-xl overflow-hidden z-10">
-                  <button
-                    onClick={() => {
-                      onEdit(task);
-                      setMenuOpen(false);
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-zinc-300 hover:text-white hover:bg-white/5 transition-colors"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => {
-                      onDelete(task);
-                      setMenuOpen(false);
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Delete
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
+                {menuOpen && (
+                  <div className="absolute right-0 top-8 w-40 rounded-lg bg-[#0F0F11] border border-white/10 shadow-xl overflow-hidden z-10">
+                    <button
+                      onClick={() => {
+                        onEdit(task);
+                        setMenuOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-zinc-300 hover:text-white hover:bg-white/5 transition-colors"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => {
+                        onDelete(task);
+                        setMenuOpen(false);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Delete
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="space-y-2 pt-3 border-t border-white/5">

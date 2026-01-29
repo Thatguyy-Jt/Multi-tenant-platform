@@ -1,6 +1,7 @@
 import Task from '../models/Task.js';
 import Project from '../models/Project.js';
 import logger from '../utils/logger.js';
+import { ROLES } from '../config/permissions.js';
 
 /**
  * @desc    Create new task
@@ -128,7 +129,7 @@ export const getTask = async (req, res, next) => {
 /**
  * @desc    Update task
  * @route   PUT /api/tasks/:id
- * @access  Private (All members)
+ * @access  Private (All members can update, but only Admin/Owner can mark as done)
  */
 export const updateTask = async (req, res, next) => {
   try {
@@ -147,9 +148,20 @@ export const updateTask = async (req, res, next) => {
       });
     }
 
-    // TODO: Optional - Restrict who can update (e.g. only assignee or admin)
-    // For now, all members can update tasks
+    // Restrict marking task as 'done' to Admin/Owner only
+    const isMarkingAsDone = req.body.status === 'done' && task.status !== 'done';
+    const isAdminOrOwner = req.tenant.role === ROLES.ADMIN || req.tenant.role === ROLES.OWNER;
 
+    if (isMarkingAsDone && !isAdminOrOwner) {
+      return res.status(403).json({
+        success: false,
+        error: {
+          message: 'Only administrators and owners can mark tasks as done',
+        },
+      });
+    }
+
+    // All members can update other fields, but status change to 'done' is restricted above
     task = await Task.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
       runValidators: true,
@@ -157,7 +169,7 @@ export const updateTask = async (req, res, next) => {
       .populate('assigneeId', 'email')
       .populate('projectId', 'name');
 
-    logger.info(`Task updated: ${task._id} by ${req.tenant.userId}`);
+    logger.info(`Task updated: ${task._id} by ${req.tenant.userId}${isMarkingAsDone ? ' (marked as done)' : ''}`);
 
     res.status(200).json({
       success: true,

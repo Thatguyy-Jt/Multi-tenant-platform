@@ -117,6 +117,25 @@ const Tasks = () => {
     }
   };
 
+  const handleMarkAsDone = async (task) => {
+    if (task.status === 'done') return;
+
+    setIsSubmitting(true);
+    setError('');
+
+    try {
+      await api.put(`/tasks/${task._id}`, {
+        ...task,
+        status: 'done',
+      });
+      fetchTasks();
+    } catch (err) {
+      setError(err.response?.data?.error?.message || err.message || 'Failed to mark task as done');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   // Filter and search tasks
   const filteredTasks = tasks.filter((task) => {
     const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -256,7 +275,9 @@ const Tasks = () => {
               task={task}
               onEdit={handleEdit}
               onDelete={handleDelete}
+              onMarkAsDone={handleMarkAsDone}
               canDelete={isAdminOrOwner}
+              canMarkAsDone={isAdminOrOwner}
               delay={index * 0.05}
             />
           ))}
