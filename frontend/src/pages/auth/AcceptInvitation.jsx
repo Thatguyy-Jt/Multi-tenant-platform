@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -22,11 +22,10 @@ const acceptInvitationSchema = z.object({
 
 const AcceptInvitation = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const { token } = useParams();
   const { acceptInvitation } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const token = searchParams.get('token');
 
   useEffect(() => {
     if (!token) {
