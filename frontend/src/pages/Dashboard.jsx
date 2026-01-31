@@ -124,10 +124,7 @@ const Dashboard = () => {
 
           {/* Charts and Activity Row */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            <ActivityChart
-              data={stats.activityOverview || []}
-              subtitle="Organization activity (last 30 days)"
-            />
+            <ActivityChart taskBreakdown={stats.taskBreakdown || {}} />
             <RecentActivity activities={stats.recentActivity || []} />
           </div>
 
