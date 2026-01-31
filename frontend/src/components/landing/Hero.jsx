@@ -8,14 +8,6 @@ const Hero = () => {
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-teal-600/20 rounded-[100%] blur-[120px] pointer-events-none animate-pulse"></div>
       
       <div className="max-w-5xl mx-auto text-center relative z-10">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-xs font-medium text-teal-400 mb-8 animate-fade-in">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-teal-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-teal-500"></span>
-          </span>
-          Platform v1.0 is now live
-        </div>
-
         <h1 className="text-5xl md:text-7xl font-semibold tracking-tighter leading-[1.1] mb-8 animate-clip-in delay-100">
           Secure, Multi-Tenant Infrastructure <br />
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-emerald-500">

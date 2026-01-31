@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <defs>
+    <linearGradient id="motion-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#14b8a6"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="8" fill="url(#motion-gradient)"/>
+  <!-- M for Motion -->
+  <path d="M8 22h2.5V14l3 5 3-5v8h2.5V10h-2.5l-4 7-4-7H8v12z" fill="white"/>
+</svg>
