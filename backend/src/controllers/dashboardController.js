@@ -16,16 +16,22 @@ export const getDashboardStats = async (req, res, next) => {
     };
 
     // Parallel execution for performance
-    const [userCount, projectCount, taskCount, recentActivity] = await Promise.all([
+    const [userCount, projectCount, taskCount, recentProjects, recentTasks] = await Promise.all([
       User.countDocuments(tenantQuery),
       Project.countDocuments(tenantQuery),
       Task.countDocuments(tenantQuery),
-      // Get recent 5 items (projects + tasks mixed would be complex, let's just get recent projects)
       Project.find(tenantQuery)
         .sort({ createdAt: -1 })
         .limit(5)
         .select('name status createdAt createdBy')
-        .populate('createdBy', 'email'),
+        .populate('createdBy', 'email')
+        .lean(),
+      Task.find(tenantQuery)
+        .sort({ createdAt: -1 })
+        .limit(5)
+        .select('title status createdAt createdBy')
+        .populate('createdBy', 'email')
+        .lean(),
     ]);
 
     // Task breakdown by status
@@ -33,6 +39,27 @@ export const getDashboardStats = async (req, res, next) => {
       { $match: tenantQuery },
       { $group: { _id: '$status', count: { $sum: 1 } } },
     ]);
+
+    // Combine recent projects and tasks into one activity list, sorted by date
+    const projectActivities = recentProjects.map((p) => ({
+      id: p._id.toString(),
+      type: 'project',
+      name: p.name,
+      status: p.status,
+      createdAt: p.createdAt,
+      createdBy: p.createdBy,
+    }));
+    const taskActivities = recentTasks.map((t) => ({
+      id: t._id.toString(),
+      type: 'task',
+      name: t.title,
+      status: t.status,
+      createdAt: t.createdAt,
+      createdBy: t.createdBy,
+    }));
+    const recentActivity = [...projectActivities, ...taskActivities]
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .slice(0, 10);
 
     res.status(200).json({
       success: true,

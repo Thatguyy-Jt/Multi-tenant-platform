@@ -3,18 +3,28 @@ import { motion } from 'framer-motion';
 import { fadeInUp } from '../../lib/animations';
 import Card from '../ui/Card';
 import Badge from '../ui/Badge';
-import { FolderKanban, Clock } from 'lucide-react';
+import { FolderKanban, CheckSquare, Clock } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 const RecentActivity = ({ activities = [], className = '' }) => {
-  const getStatusVariant = (status) => {
-    const statusMap = {
+  const getStatusVariant = (status, type) => {
+    if (type === 'task') {
+      const taskMap = { todo: 'default', in_progress: 'info', review: 'warning', done: 'success' };
+      return taskMap[status] || 'default';
+    }
+    const projectMap = {
       active: 'success',
       completed: 'info',
       pending: 'warning',
       archived: 'default',
     };
-    return statusMap[status] || 'default';
+    return projectMap[status] || 'default';
+  };
+
+  const formatStatusLabel = (status, type) => {
+    if (!status) return '';
+    if (type === 'task') return status.replace('_', ' ');
+    return status;
   };
 
   const formatDate = (dateString) => {
@@ -52,17 +62,25 @@ const RecentActivity = ({ activities = [], className = '' }) => {
               transition={{ delay: index * 0.1 }}
               className="flex items-start gap-3 p-3 rounded-lg hover:bg-white/5 transition-colors"
             >
-              <div className="p-2 rounded-lg bg-teal-500/10 flex-shrink-0">
-                <FolderKanban className="w-4 h-4 text-teal-400" />
+              <div className="p-2 rounded-lg bg-teal-500/10 shrink-0">
+                {activity.type === 'task' ? (
+                  <CheckSquare className="w-4 h-4 text-teal-400" />
+                ) : (
+                  <FolderKanban className="w-4 h-4 text-teal-400" />
+                )}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  <span className="text-xs text-zinc-500 uppercase tracking-wide">
+                    {activity.type === 'task' ? 'Task' : 'Project'}
+                  </span>
+                  <span className="text-zinc-600">·</span>
                   <p className="text-sm font-medium text-white truncate">
-                    {activity.name || 'Untitled Project'}
+                    {activity.name || (activity.type === 'task' ? 'Untitled Task' : 'Untitled Project')}
                   </p>
                   {activity.status && (
-                    <Badge variant={getStatusVariant(activity.status)} size="sm">
-                      {activity.status}
+                    <Badge variant={getStatusVariant(activity.status, activity.type)} size="sm">
+                      {formatStatusLabel(activity.status, activity.type)}
                     </Badge>
                   )}
                 </div>
@@ -71,7 +89,7 @@ const RecentActivity = ({ activities = [], className = '' }) => {
                   <span>{formatDate(activity.createdAt)}</span>
                   {activity.createdBy?.email && (
                     <>
-                      <span>•</span>
+                      <span>·</span>
                       <span>by {activity.createdBy.email}</span>
                     </>
                   )}
