@@ -184,10 +184,15 @@ const TaskCard = ({
           {dueDateInfo && (
             <div className={cn(
               "flex items-center gap-2 text-xs",
-              dueDateInfo.isOverdue ? "text-red-400" : "text-zinc-500"
+              // When task is done, don't show overdue styling — show neutral
+              task.status === 'done' ? "text-zinc-500" : dueDateInfo.isOverdue ? "text-red-400" : "text-zinc-500"
             )}>
               <Calendar className="w-3 h-3" />
-              <span>{dueDateInfo.text}</span>
+              <span>
+                {task.status === 'done' && dueDateInfo.isOverdue
+                  ? (task.dueDate ? `Due ${new Date(task.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : dueDateInfo.text)
+                  : dueDateInfo.text}
+              </span>
             </div>
           )}
         </div>
