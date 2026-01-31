@@ -125,10 +125,8 @@ const Dashboard = () => {
           {/* Charts and Activity Row */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             <ActivityChart
-              data={['todo', 'in_progress', 'review', 'done'].map((status) => ({
-                value: stats.taskBreakdown?.[status] ?? 0,
-                label: `${status.replace('_', ' ')}: ${stats.taskBreakdown?.[status] ?? 0}`,
-              }))}
+              data={stats.activityOverview || []}
+              subtitle="Organization activity (last 30 days)"
             />
             <RecentActivity activities={stats.recentActivity || []} />
           </div>

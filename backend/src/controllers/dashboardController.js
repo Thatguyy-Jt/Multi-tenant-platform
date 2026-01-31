@@ -40,6 +40,42 @@ export const getDashboardStats = async (req, res, next) => {
       { $group: { _id: '$status', count: { $sum: 1 } } },
     ]);
 
+    // Organization activity overview: count of tasks + projects created per day (last 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    thirtyDaysAgo.setHours(0, 0, 0, 0);
+
+    const [tasksByDay, projectsByDay] = await Promise.all([
+      Task.aggregate([
+        { $match: { ...tenantQuery, createdAt: { $gte: thirtyDaysAgo } } },
+        { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, count: { $sum: 1 } } },
+        { $sort: { _id: 1 } },
+      ]),
+      Project.aggregate([
+        { $match: { ...tenantQuery, createdAt: { $gte: thirtyDaysAgo } } },
+        { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, count: { $sum: 1 } } },
+        { $sort: { _id: 1 } },
+      ]),
+    ]);
+
+    const countByDay = {};
+    for (let d = 0; d < 30; d++) {
+      const date = new Date(thirtyDaysAgo);
+      date.setDate(date.getDate() + d);
+      const key = date.toISOString().slice(0, 10);
+      countByDay[key] = 0;
+    }
+    tasksByDay.forEach((row) => { countByDay[row._id] = (countByDay[row._id] || 0) + row.count; });
+    projectsByDay.forEach((row) => { countByDay[row._id] = (countByDay[row._id] || 0) + row.count; });
+
+    const activityOverview = Object.entries(countByDay)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([dateStr, count]) => ({
+        label: new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        value: count,
+        date: dateStr,
+      }));
+
     // Combine recent projects and tasks into one activity list, sorted by date
     const projectActivities = recentProjects.map((p) => ({
       id: p._id.toString(),
@@ -73,6 +109,7 @@ export const getDashboardStats = async (req, res, next) => {
           acc[curr._id] = curr.count;
           return acc;
         }, {}),
+        activityOverview,
         recentActivity,
       },
     });
