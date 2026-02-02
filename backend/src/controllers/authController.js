@@ -124,16 +124,19 @@ export const login = async (req, res, next) => {
       });
     }
 
-    // Get organization
-    const organization = await Organization.findById(user.organizationId);
-
-    if (!organization) {
-      return res.status(500).json({
-        success: false,
-        error: {
-          message: 'Organization not found',
-        },
-      });
+    // Platform admin (super_admin with no org) has no organization
+    const isPlatformAdmin = user.role === 'super_admin' && (user.organizationId == null || user.tenantId == null);
+    let organization = null;
+    if (!isPlatformAdmin && user.organizationId) {
+      organization = await Organization.findById(user.organizationId);
+      if (!organization) {
+        return res.status(500).json({
+          success: false,
+          error: {
+            message: 'Organization not found',
+          },
+        });
+      }
     }
 
     // Generate JWT token
@@ -184,15 +187,15 @@ export const login = async (req, res, next) => {
           id: user._id,
           email: user.email,
           role: user.role,
-          organizationId: user.organizationId,
-          tenantId: user.tenantId,
+          organizationId: user.organizationId ?? null,
+          tenantId: user.tenantId ?? null,
         },
-        organization: {
+        organization: organization ? {
           id: organization._id,
           name: organization.name,
           tenantId: organization.tenantId,
           subscriptionPlan: organization.subscriptionPlan,
-        },
+        } : null,
       },
     });
   } catch (error) {
@@ -224,15 +227,18 @@ export const logout = async (req, res) => {
 export const getMe = async (req, res, next) => {
   try {
     const user = await User.findById(req.user._id);
-    const organization = await Organization.findById(user.organizationId);
-
-    if (!organization) {
-      return res.status(500).json({
-        success: false,
-        error: {
-          message: 'Organization not found',
-        },
-      });
+    const isPlatformAdmin = user.role === 'super_admin' && (user.organizationId == null || user.tenantId == null);
+    let organization = null;
+    if (!isPlatformAdmin && user.organizationId) {
+      organization = await Organization.findById(user.organizationId);
+      if (!organization) {
+        return res.status(500).json({
+          success: false,
+          error: {
+            message: 'Organization not found',
+          },
+        });
+      }
     }
 
     res.status(200).json({
@@ -242,15 +248,15 @@ export const getMe = async (req, res, next) => {
           id: user._id,
           email: user.email,
           role: user.role,
-          organizationId: user.organizationId,
-          tenantId: user.tenantId,
+          organizationId: user.organizationId ?? null,
+          tenantId: user.tenantId ?? null,
         },
-        organization: {
+        organization: organization ? {
           id: organization._id,
           name: organization.name,
           tenantId: organization.tenantId,
           subscriptionPlan: organization.subscriptionPlan,
-        },
+        } : null,
       },
     });
   } catch (error) {

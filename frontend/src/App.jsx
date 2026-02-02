@@ -16,9 +16,7 @@ import Tasks from './pages/dashboard/Tasks';
 import Organization from './pages/dashboard/Organization';
 import Team from './pages/dashboard/Team';
 import Billing from './pages/dashboard/Billing';
-
-// Placeholder pages for dashboard routes (will be built in later phases)
-const AdminPage = () => <div className="p-6"><h1 className="text-2xl font-semibold text-white mb-4">Admin Dashboard</h1><p className="text-zinc-400">Coming in Phase 9</p></div>;
+import Admin from './pages/dashboard/Admin';
 
 function App() {
   return (
@@ -45,7 +43,7 @@ function App() {
             <Route path="projects" element={<Projects />} />
             <Route path="tasks" element={<Tasks />} />
             <Route path="billing" element={<Billing />} />
-            <Route path="admin" element={<AdminPage />} />
+            <Route path="admin" element={<Admin />} />
           </Route>
         </Routes>
       </AuthProvider>

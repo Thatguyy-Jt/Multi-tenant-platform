@@ -19,6 +19,17 @@ export const attachTenant = (req, res, next) => {
       });
     }
 
+    // Super Admin with no organization: platform-only, cannot access tenant-scoped routes
+    const isPlatformAdmin = req.user.role === 'super_admin' && (req.user.organizationId == null || req.user.tenantId == null);
+    if (isPlatformAdmin) {
+      return res.status(403).json({
+        success: false,
+        error: {
+          message: 'Platform admin has no organization context. Use the Admin dashboard only.',
+        },
+      });
+    }
+
     // Attach tenant information to request
     req.tenant = {
       tenantId: req.user.tenantId,

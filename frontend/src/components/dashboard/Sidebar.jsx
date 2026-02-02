@@ -19,21 +19,24 @@ const Sidebar = ({ isOpen, onClose }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const isSuperAdmin = user?.role === 'super_admin';
+  const isPlatformAdmin = isSuperAdmin && (user?.organizationId == null || user?.tenantId == null);
 
   const handleLogout = async () => {
     await logout();
     navigate('/');
   };
 
-  const navigation = [
-    { name: 'Overview', path: '/dashboard', icon: LayoutDashboard },
-    { name: 'Organization', path: '/dashboard/organization', icon: Building2 },
-    { name: 'Team', path: '/dashboard/team', icon: Users },
-    { name: 'Projects', path: '/dashboard/projects', icon: FolderKanban },
-    { name: 'Tasks', path: '/dashboard/tasks', icon: CheckSquare },
-    { name: 'Billing', path: '/dashboard/billing', icon: CreditCard },
-    ...(isSuperAdmin ? [{ name: 'Admin', path: '/dashboard/admin', icon: Shield }] : []),
-  ];
+  const navigation = isPlatformAdmin
+    ? [{ name: 'Admin', path: '/dashboard/admin', icon: Shield }]
+    : [
+        { name: 'Overview', path: '/dashboard', icon: LayoutDashboard },
+        { name: 'Organization', path: '/dashboard/organization', icon: Building2 },
+        { name: 'Team', path: '/dashboard/team', icon: Users },
+        { name: 'Projects', path: '/dashboard/projects', icon: FolderKanban },
+        { name: 'Tasks', path: '/dashboard/tasks', icon: CheckSquare },
+        { name: 'Billing', path: '/dashboard/billing', icon: CreditCard },
+        ...(isSuperAdmin ? [{ name: 'Admin', path: '/dashboard/admin', icon: Shield }] : []),
+      ];
 
   return (
     <>

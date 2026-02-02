@@ -1,10 +1,22 @@
-import React, { useState } from 'react';
-import { Outlet } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import Sidebar from '../components/dashboard/Sidebar';
 import Header from '../components/dashboard/Header';
 
 const DashboardLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const isPlatformAdmin = user?.role === 'super_admin' && (user?.organizationId == null || user?.tenantId == null);
+
+  useEffect(() => {
+    if (isPlatformAdmin && !location.pathname.endsWith('/admin')) {
+      navigate('/dashboard/admin', { replace: true });
+    }
+  }, [isPlatformAdmin, location.pathname, navigate]);
 
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);

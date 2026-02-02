@@ -10,7 +10,8 @@ import AuthLayout from '../../layouts/AuthLayout';
 import Input from '../../components/ui/Input';
 import Button from '../../components/ui/Button';
 import Logo from '../../components/ui/Logo';
-import { UserPlus } from 'lucide-react';
+import api from '../../lib/axios';
+import { UserPlus, XCircle } from 'lucide-react';
 
 const acceptInvitationSchema = z.object({
   password: z.string().min(6, 'Password must be at least 6 characters'),
@@ -25,7 +26,9 @@ const AcceptInvitation = () => {
   const { token } = useParams();
   const { acceptInvitation } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRejecting, setIsRejecting] = useState(false);
   const [error, setError] = useState('');
+  const [rejectSuccess, setRejectSuccess] = useState(false);
 
   useEffect(() => {
     if (!token) {
@@ -58,6 +61,23 @@ const AcceptInvitation = () => {
     }
 
     setIsSubmitting(false);
+  };
+
+  const handleReject = async () => {
+    if (!token) return;
+
+    setIsRejecting(true);
+    setError('');
+
+    try {
+      await api.post(`/invitations/${token}/reject`);
+      setRejectSuccess(true);
+      setTimeout(() => navigate('/'), 2000);
+    } catch (err) {
+      setError(err.message || 'Failed to reject invitation');
+    } finally {
+      setIsRejecting(false);
+    }
   };
 
   return (
@@ -93,6 +113,16 @@ const AcceptInvitation = () => {
           </p>
         </motion.div>
 
+        {rejectSuccess && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/50 text-emerald-400 text-sm"
+          >
+            Invitation declined. Redirecting you to the home page...
+          </motion.div>
+        )}
+
         {error && (
           <motion.div
             initial={{ opacity: 0, y: -10 }}
@@ -127,10 +157,22 @@ const AcceptInvitation = () => {
             type="submit"
             variant="primary"
             className="w-full"
-            disabled={isSubmitting || !token}
+            disabled={isSubmitting || isRejecting || !token}
           >
             {isSubmitting ? 'Accepting...' : 'Accept invitation'}
           </Button>
+
+          <div className="text-center pt-2">
+            <button
+              type="button"
+              onClick={handleReject}
+              disabled={isSubmitting || isRejecting || !token}
+              className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-zinc-300 transition-colors disabled:opacity-50"
+            >
+              <XCircle className="w-4 h-4" />
+              {isRejecting ? 'Rejecting...' : 'Reject invitation'}
+            </button>
+          </div>
         </motion.form>
       </motion.div>
     </AuthLayout>
