@@ -152,3 +152,137 @@ export const getMyStats = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * @desc    Export dashboard report as CSV
+ * @route   GET /api/dashboard/export
+ * @access  Private (Owner/Admin only)
+ */
+export const exportDashboardReport = async (req, res, next) => {
+  try {
+    const tenantQuery = {
+      organizationId: req.tenant.organizationId,
+      tenantId: req.tenant.tenantId,
+    };
+
+    const [userCount, projectCount, taskCount, taskBreakdownArr, recentProjects, recentTasks] = await Promise.all([
+      User.countDocuments(tenantQuery),
+      Project.countDocuments(tenantQuery),
+      Task.countDocuments(tenantQuery),
+      Task.aggregate([
+        { $match: tenantQuery },
+        { $group: { _id: '$status', count: { $sum: 1 } } },
+      ]),
+      Project.find(tenantQuery).sort({ createdAt: -1 }).limit(10).select('name status createdAt').lean(),
+      Task.find(tenantQuery).sort({ createdAt: -1 }).limit(10).select('title status priority createdAt').lean(),
+    ]);
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const filename = `report-${dateStr}.csv`;
+
+    const rows = [
+      ['Metric', 'Value'],
+      ['Report Date', dateStr],
+      ['Total Users', String(userCount)],
+      ['Total Projects', String(projectCount)],
+      ['Total Tasks', String(taskCount)],
+      [],
+      ['Task Status', 'Count'],
+      ...taskBreakdownArr.map((r) => [r._id, String(r.count)]),
+      [],
+      ['Recent Projects', 'Status', 'Created At'],
+      ...recentProjects.map((p) => [p.name, p.status, p.createdAt ? new Date(p.createdAt).toISOString() : '']),
+      [],
+      ['Recent Tasks', 'Status', 'Priority', 'Created At'],
+      ...recentTasks.map((t) => [t.title, t.status, t.priority || '', t.createdAt ? new Date(t.createdAt).toISOString() : '']),
+    ];
+
+    const csv = rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\r\n');
+    const bom = '\uFEFF';
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.status(200).send(bom + csv);
+  } catch (error) {
+    logger.error(`Export dashboard error: ${error.message}`);
+    next(error);
+  }
+};
+
+/**
+ * @desc    Get analytics data for charts (task status over time, tasks per project, activity by day)
+ * @route   GET /api/dashboard/analytics
+ * @access  Private (Owner/Admin only)
+ */
+export const getAnalytics = async (req, res, next) => {
+  try {
+    const tenantQuery = {
+      organizationId: req.tenant.organizationId,
+      tenantId: req.tenant.tenantId,
+    };
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    thirtyDaysAgo.setHours(0, 0, 0, 0);
+
+    const [tasksByDayAndStatus, tasksPerProject, activityByDay] = await Promise.all([
+      Task.aggregate([
+        { $match: { ...tenantQuery, createdAt: { $gte: thirtyDaysAgo } } },
+        {
+          $group: {
+            _id: {
+              date: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+              status: '$status',
+            },
+            count: { $sum: 1 },
+          },
+        },
+        { $sort: { '_id.date': 1 } },
+      ]),
+      Task.aggregate([
+        { $match: tenantQuery },
+        { $group: { _id: '$projectId', count: { $sum: 1 } } },
+        { $lookup: { from: 'projects', localField: '_id', foreignField: '_id', as: 'project' } },
+        { $unwind: { path: '$project', preserveNullAndEmptyArrays: true } },
+        { $project: { projectName: '$project.name', count: 1, _id: 0 } },
+        { $sort: { count: -1 } },
+        { $limit: 20 },
+      ]),
+      Task.aggregate([
+        { $match: { ...tenantQuery, createdAt: { $gte: thirtyDaysAgo } } },
+        { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, count: { $sum: 1 } } },
+        { $sort: { _id: 1 } },
+      ]),
+    ]);
+
+    const taskStatusOverTime = {};
+    tasksByDayAndStatus.forEach((r) => {
+      const date = r._id.date;
+      if (!taskStatusOverTime[date]) taskStatusOverTime[date] = { date, labels: {} };
+      taskStatusOverTime[date].labels[r._id.status] = r.count;
+    });
+    const taskStatusOverTimeArray = Object.values(taskStatusOverTime).sort((a, b) => a.date.localeCompare(b.date));
+
+    const tasksPerProjectArray = tasksPerProject.map((r) => ({
+      project: r.projectName || 'No project',
+      count: r.count,
+    }));
+
+    const activityByDayArray = activityByDay.map((r) => ({
+      date: r._id,
+      label: new Date(r._id + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      value: r.count,
+    }));
+
+    res.status(200).json({
+      success: true,
+      data: {
+        taskStatusOverTime: taskStatusOverTimeArray,
+        tasksPerProject: tasksPerProjectArray,
+        activityByDay: activityByDayArray,
+      },
+    });
+  } catch (error) {
+    logger.error(`Get analytics error: ${error.message}`);
+    next(error);
+  }
+};

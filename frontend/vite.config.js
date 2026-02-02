@@ -4,6 +4,7 @@ import path from 'path'
 
 export default defineConfig({
   plugins: [react()],
+  envPrefix: 'VITE_',
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
@@ -22,6 +23,7 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: false,
+    reportCompressedSize: true,
     rollupOptions: {
       output: {
         manualChunks: {

@@ -3,6 +3,7 @@ import User from '../models/User.js';
 import Organization from '../models/Organization.js';
 import { sendInvitationEmail } from '../services/emailService.js';
 import logger from '../utils/logger.js';
+import { createAuditLog } from '../utils/auditLog.js';
 
 /**
  * @desc    Create invitation
@@ -73,6 +74,12 @@ export const createInvitation = async (req, res, next) => {
     }
 
     logger.info(`Invitation created for ${email} by user ${req.tenant.userId}`);
+    await createAuditLog(req, {
+      action: 'invitation_sent',
+      resource: 'invitation',
+      resourceId: invitation._id.toString(),
+      details: { email: invitation.email, role: invitation.role },
+    });
 
     res.status(201).json({
       success: true,
@@ -216,6 +223,15 @@ export const acceptInvitation = async (req, res, next) => {
     await invitation.save();
 
     logger.info(`Invitation accepted by ${invitation.email} for organization ${invitation.organizationId}`);
+    await createAuditLog(req, {
+      action: 'invitation_accepted',
+      resource: 'invitation',
+      resourceId: invitation._id.toString(),
+      userId: user._id,
+      tenantId: invitation.tenantId,
+      organizationId: invitation.organizationId.toString(),
+      details: { email: invitation.email, role: invitation.role },
+    });
 
     // Get organization
     const organization = await Organization.findById(invitation.organizationId);
@@ -277,6 +293,15 @@ export const rejectInvitation = async (req, res, next) => {
     await invitation.save();
 
     logger.info(`Invitation rejected for ${invitation.email}`);
+    await createAuditLog(req, {
+      action: 'invitation_rejected',
+      resource: 'invitation',
+      resourceId: invitation._id.toString(),
+      userId: null,
+      tenantId: invitation.tenantId,
+      organizationId: invitation.organizationId.toString(),
+      details: { email: invitation.email },
+    });
 
     res.status(200).json({
       success: true,
@@ -325,6 +350,12 @@ export const cancelInvitation = async (req, res, next) => {
     await invitation.deleteOne();
 
     logger.info(`Invitation cancelled: ${id} by user ${req.tenant.userId}`);
+    await createAuditLog(req, {
+      action: 'invitation_cancelled',
+      resource: 'invitation',
+      resourceId: id,
+      details: { email: invitation.email },
+    });
 
     res.status(200).json({
       success: true,

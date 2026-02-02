@@ -7,9 +7,10 @@ import {
   CheckSquare, 
   Building2, 
   CreditCard,
-  Settings,
   Shield,
-  LogOut
+  LogOut,
+  FileText,
+  BarChart3
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import Logo from '../ui/Logo';
@@ -26,15 +27,18 @@ const Sidebar = ({ isOpen, onClose }) => {
     navigate('/');
   };
 
+  const isAdminOrOwner = user?.role === 'owner' || user?.role === 'admin';
   const navigation = isPlatformAdmin
     ? [{ name: 'Admin', path: '/dashboard/admin', icon: Shield }]
     : [
         { name: 'Overview', path: '/dashboard', icon: LayoutDashboard },
+        ...(isAdminOrOwner ? [{ name: 'Analytics', path: '/dashboard/analytics', icon: BarChart3 }] : []),
         { name: 'Organization', path: '/dashboard/organization', icon: Building2 },
         { name: 'Team', path: '/dashboard/team', icon: Users },
         { name: 'Projects', path: '/dashboard/projects', icon: FolderKanban },
         { name: 'Tasks', path: '/dashboard/tasks', icon: CheckSquare },
         { name: 'Billing', path: '/dashboard/billing', icon: CreditCard },
+        ...(isAdminOrOwner ? [{ name: 'Audit log', path: '/dashboard/audit-log', icon: FileText }] : []),
         ...(isSuperAdmin ? [{ name: 'Admin', path: '/dashboard/admin', icon: Shield }] : []),
       ];
 

@@ -4,6 +4,7 @@ import { generateToken } from '../utils/jwt.js';
 import { sendPasswordResetEmail } from '../services/emailService.js';
 import { setAuthCookie, clearAuthCookie } from '../utils/cookies.js';
 import logger from '../utils/logger.js';
+import { createAuditLog } from '../utils/auditLog.js';
 import crypto from 'crypto';
 
 /**
@@ -103,6 +104,12 @@ export const login = async (req, res, next) => {
 
     if (!user) {
       logger.warn(`Login failed: User not found for email: ${email}`);
+      await createAuditLog(req, {
+        action: 'login_failure',
+        resource: 'auth',
+        userId: null,
+        details: { email, reason: 'user_not_found' },
+      });
       return res.status(401).json({
         success: false,
         error: {
@@ -116,6 +123,14 @@ export const login = async (req, res, next) => {
 
     if (!isMatch) {
       logger.warn(`Login failed: Invalid password for email: ${email}`);
+      await createAuditLog(req, {
+        action: 'login_failure',
+        resource: 'auth',
+        userId: user._id,
+        tenantId: user.tenantId,
+        organizationId: user.organizationId,
+        details: { email, reason: 'invalid_password' },
+      });
       return res.status(401).json({
         success: false,
         error: {
@@ -174,6 +189,14 @@ export const login = async (req, res, next) => {
     }
 
     logger.info(`User logged in successfully: ${email}`);
+    await createAuditLog(req, {
+      action: 'login_success',
+      resource: 'auth',
+      userId: user._id,
+      tenantId: user.tenantId ?? undefined,
+      organizationId: user.organizationId ?? undefined,
+      details: { email },
+    });
 
     // #region agent log
     const finalHeaders = res.getHeader('Set-Cookie');
@@ -210,6 +233,12 @@ export const login = async (req, res, next) => {
  * @access  Public
  */
 export const logout = async (req, res) => {
+  if (req.user) {
+    await createAuditLog(req, {
+      action: 'logout',
+      resource: 'auth',
+    });
+  }
   // Clear authentication cookie
   clearAuthCookie(res);
 
@@ -325,6 +354,14 @@ export const forgotPassword = async (req, res, next) => {
       console.log('Email sent successfully!');
 
       logger.info('Password reset email sent successfully', { email: user.email });
+      await createAuditLog(req, {
+        action: 'password_reset_request',
+        resource: 'auth',
+        userId: user._id,
+        tenantId: user.tenantId ?? undefined,
+        organizationId: user.organizationId ?? undefined,
+        details: { email: user.email },
+      });
 
       console.log('=== EMAIL SENT SUCCESSFULLY ===');
 
@@ -421,6 +458,14 @@ export const resetPassword = async (req, res, next) => {
     setAuthCookie(res, jwtToken);
 
     logger.info(`Password reset successful for user: ${user.email}`);
+    await createAuditLog(req, {
+      action: 'password_reset_success',
+      resource: 'auth',
+      userId: user._id,
+      tenantId: user.tenantId ?? undefined,
+      organizationId: user.organizationId ?? undefined,
+      details: { email: user.email },
+    });
 
     res.status(200).json({
       success: true,

@@ -15,7 +15,8 @@ export const getPlatformStats = async (req, res, next) => {
       Organization.find({})
         .sort({ createdAt: -1 })
         .limit(5)
-        .select('name tenantId subscriptionPlan createdAt'),
+        .select('name tenantId subscriptionPlan createdAt')
+        .lean(),
     ]);
 
     res.status(200).json({
@@ -41,7 +42,7 @@ export const getPlatformStats = async (req, res, next) => {
  */
 export const getTenants = async (req, res, next) => {
   try {
-    const tenants = await Organization.find({}).sort({ createdAt: -1 });
+    const tenants = await Organization.find({}).sort({ createdAt: -1 }).lean();
 
     res.status(200).json({
       success: true,

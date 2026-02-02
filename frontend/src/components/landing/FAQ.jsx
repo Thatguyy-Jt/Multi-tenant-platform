@@ -15,7 +15,7 @@ const FAQ = () => {
     },
     {
       question: 'Is audit logging included?',
-      answer: 'Yes, comprehensive audit logging is built into the platform. All user actions, authentication events, and administrative changes are logged with timestamps, user IDs, and tenant context. This ensures compliance with enterprise security requirements and provides full traceability for security audits and compliance reporting.',
+      answer: 'Yes. Key actions and auth events are logged with timestamps and tenant context (e.g. login, signup, invitation sent/accepted/rejected, project and task create/update/delete, billing events). Owners and Admins can view the audit log from the dashboard.',
     },
   ];
 

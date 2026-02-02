@@ -42,6 +42,12 @@ export const createTask = async (req, res, next) => {
     });
 
     logger.info(`Task created: ${task._id} by ${req.tenant.userId}`);
+    await createAuditLog(req, {
+      action: 'task_create',
+      resource: 'task',
+      resourceId: task._id.toString(),
+      details: { title: task.title, projectId: task.projectId?.toString() },
+    });
 
     res.status(201).json({
       success: true,
@@ -105,7 +111,8 @@ export const getTask = async (req, res, next) => {
     })
       .populate('assigneeId', 'email')
       .populate('projectId', 'name')
-      .populate('createdBy', 'email');
+      .populate('createdBy', 'email')
+      .lean();
 
     if (!task) {
       return res.status(404).json({
@@ -170,6 +177,12 @@ export const updateTask = async (req, res, next) => {
       .populate('projectId', 'name');
 
     logger.info(`Task updated: ${task._id} by ${req.tenant.userId}${isMarkingAsDone ? ' (marked as done)' : ''}`);
+    await createAuditLog(req, {
+      action: 'task_update',
+      resource: 'task',
+      resourceId: task._id.toString(),
+      details: { title: task.title, status: task.status },
+    });
 
     res.status(200).json({
       success: true,
@@ -208,6 +221,12 @@ export const deleteTask = async (req, res, next) => {
     await task.deleteOne();
 
     logger.info(`Task deleted: ${req.params.id} by ${req.tenant.userId}`);
+    await createAuditLog(req, {
+      action: 'task_delete',
+      resource: 'task',
+      resourceId: req.params.id,
+      details: { title: task.title },
+    });
 
     res.status(200).json({
       success: true,

@@ -1,5 +1,6 @@
 import Project from '../models/Project.js';
 import logger from '../utils/logger.js';
+import { createAuditLog } from '../utils/auditLog.js';
 
 /**
  * @desc    Create new project
@@ -20,6 +21,12 @@ export const createProject = async (req, res, next) => {
     });
 
     logger.info(`Project created: ${project._id} by ${req.tenant.userId}`);
+    await createAuditLog(req, {
+      action: 'project_create',
+      resource: 'project',
+      resourceId: project._id.toString(),
+      details: { name: project.name },
+    });
 
     res.status(201).json({
       success: true,
@@ -43,7 +50,8 @@ export const getProjects = async (req, res, next) => {
       tenantId: req.tenant.tenantId,
     })
       .populate('createdBy', 'email')
-      .sort({ updatedAt: -1 });
+      .sort({ updatedAt: -1 })
+      .lean();
 
     res.status(200).json({
       success: true,
@@ -69,7 +77,9 @@ export const getProject = async (req, res, next) => {
       _id: req.params.id,
       organizationId: req.tenant.organizationId,
       tenantId: req.tenant.tenantId,
-    }).populate('createdBy', 'email');
+    })
+      .populate('createdBy', 'email')
+      .lean();
 
     if (!project) {
       return res.status(404).json({
@@ -120,6 +130,12 @@ export const updateProject = async (req, res, next) => {
     });
 
     logger.info(`Project updated: ${project._id} by ${req.tenant.userId}`);
+    await createAuditLog(req, {
+      action: 'project_update',
+      resource: 'project',
+      resourceId: project._id.toString(),
+      details: { name: project.name },
+    });
 
     res.status(200).json({
       success: true,
@@ -159,6 +175,12 @@ export const deleteProject = async (req, res, next) => {
     await project.deleteOne();
 
     logger.info(`Project deleted: ${req.params.id} by ${req.tenant.userId}`);
+    await createAuditLog(req, {
+      action: 'project_delete',
+      resource: 'project',
+      resourceId: req.params.id,
+      details: { name: project.name },
+    });
 
     res.status(200).json({
       success: true,

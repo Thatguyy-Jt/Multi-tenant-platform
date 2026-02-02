@@ -79,3 +79,20 @@ export const protect = async (req, res, next) => {
     });
   }
 };
+
+/**
+ * Optional auth: attach user if token present, but do not 401 if missing.
+ * Use for routes that work both with and without auth (e.g. logout).
+ */
+export const optionalProtect = async (req, res, next) => {
+  try {
+    const token = req.cookies?.token;
+    if (!token) return next();
+    const decoded = verifyToken(token);
+    const user = await User.findById(decoded.userId).select('-password');
+    if (user) req.user = user;
+    next();
+  } catch {
+    next();
+  }
+};

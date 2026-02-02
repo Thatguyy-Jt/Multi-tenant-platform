@@ -8,7 +8,7 @@ import ActivityChart from '../components/dashboard/ActivityChart';
 import RecentActivity from '../components/dashboard/RecentActivity';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import ErrorMessage from '../components/ui/ErrorMessage';
-import { Users, FolderKanban, CheckSquare, TrendingUp } from 'lucide-react';
+import { Users, FolderKanban, CheckSquare, TrendingUp, Download } from 'lucide-react';
 
 const Dashboard = () => {
   const { user } = useAuth();
@@ -18,6 +18,28 @@ const Dashboard = () => {
   const [myStats, setMyStats] = useState(null);
 
   const isAdminOrOwner = user?.role === 'owner' || user?.role === 'admin';
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportReport = async () => {
+    if (!isAdminOrOwner) return;
+    setExporting(true);
+    try {
+      const response = await api.get('/dashboard/export', { responseType: 'blob' });
+      const blob = new Blob([response.data], { type: 'text/csv;charset=utf-8' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `report-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+    } catch (err) {
+      console.error('Export failed:', err);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   useEffect(() => {
     fetchDashboardData();
@@ -73,15 +95,28 @@ const Dashboard = () => {
       className="max-w-7xl"
     >
       {/* Header */}
-      <motion.div variants={fadeInUp} className="mb-8">
-        <h1 className="text-3xl font-semibold tracking-tight text-white mb-2">
-          Dashboard Overview
-        </h1>
-        <p className="text-zinc-400">
-          {isAdminOrOwner
-            ? "Welcome back! Here's an overview of your organization."
-            : "Welcome back! Here's your personal dashboard."}
-        </p>
+      <motion.div variants={fadeInUp} className="mb-8 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight text-white mb-2">
+            Dashboard Overview
+          </h1>
+          <p className="text-zinc-400">
+            {isAdminOrOwner
+              ? "Welcome back! Here's an overview of your organization."
+              : "Welcome back! Here's your personal dashboard."}
+          </p>
+        </div>
+        {isAdminOrOwner && (
+          <button
+            type="button"
+            onClick={handleExportReport}
+            disabled={exporting}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-teal-500/20 text-teal-400 border border-teal-500/30 hover:bg-teal-500/30 disabled:opacity-50 transition-colors text-sm font-medium"
+          >
+            <Download className="w-4 h-4" />
+            {exporting ? 'Exporting…' : 'Export report'}
+          </button>
+        )}
       </motion.div>
 
       {/* Admin/Owner View */}

@@ -7,7 +7,7 @@ import {
   forgotPassword,
   resetPassword,
 } from '../controllers/authController.js';
-import { protect } from '../middleware/auth.js';
+import { protect, optionalProtect } from '../middleware/auth.js';
 import {
   validateSignup,
   validateLogin,
@@ -41,7 +41,7 @@ router.use((req, res, next) => {
 // Public routes with strict rate limiting
 router.post('/signup', authLimiter, validateSignup, signup);
 router.post('/login', authLimiter, validateLogin, login);
-router.post('/logout', logout);
+router.post('/logout', optionalProtect, logout);
 router.post('/forgot-password', authLimiter, validateForgotPassword, forgotPassword);
 router.post('/reset-password/:token', authLimiter, validateResetPassword, resetPassword);
 

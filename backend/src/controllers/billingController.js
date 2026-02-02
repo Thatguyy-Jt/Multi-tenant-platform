@@ -8,6 +8,7 @@ import {
   isStripeConfigured,
 } from '../services/billingService.js';
 import logger from '../utils/logger.js';
+import { createAuditLog } from '../utils/auditLog.js';
 
 // Plan definitions (would typically be in config or DB)
 const PLANS = {
@@ -122,6 +123,12 @@ export const createSubscription = async (req, res, next) => {
       },
     });
 
+    await createAuditLog(req, {
+      action: 'billing_checkout_started',
+      resource: 'billing',
+      details: { plan },
+    });
+
     res.status(200).json({
       success: true,
       data: {
@@ -156,6 +163,11 @@ export const getBillingPortal = async (req, res, next) => {
       subscription.stripeCustomerId,
       `${process.env.FRONTEND_URL || 'http://localhost:3000'}/billing`
     );
+
+    await createAuditLog(req, {
+      action: 'billing_portal_accessed',
+      resource: 'billing',
+    });
 
     res.status(200).json({
       success: true,

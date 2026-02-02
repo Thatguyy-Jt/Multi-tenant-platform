@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
+import compression from 'compression';
 import helmet from 'helmet';
 import connectDB from './config/database.js';
 import { getEnvConfig } from './config/env.js';
@@ -18,6 +19,7 @@ import taskRoutes from './routes/taskRoutes.js';
 import dashboardRoutes from './routes/dashboardRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
 import billingRoutes from './routes/billingRoutes.js';
+import auditLogRoutes from './routes/auditLogRoutes.js';
 
 // Get environment configuration (validates env vars on import)
 const envConfig = getEnvConfig();
@@ -149,6 +151,9 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Cookie parser middleware
 app.use(cookieParser());
 
+// Compression (gzip) for response bodies
+app.use(compression());
+
 // Request ID middleware (must be early in the chain)
 app.use(requestIdMiddleware);
 
@@ -264,6 +269,7 @@ app.use('/api/tasks', taskRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/billing', billingRoutes);
+app.use('/api/audit-logs', auditLogRoutes);
 
 // 404 handler for undefined routes
 app.use('*', (req, res) => {

@@ -9,7 +9,7 @@ import logger from '../utils/logger.js';
  */
 export const getOrganization = async (req, res, next) => {
   try {
-    const organization = await Organization.findById(req.tenant.organizationId);
+    const organization = await Organization.findById(req.tenant.organizationId).lean();
 
     if (!organization) {
       return res.status(404).json({
